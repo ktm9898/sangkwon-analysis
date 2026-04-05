@@ -2,8 +2,8 @@
  * 상권분석 앱 — 설정 데이터
  */
 const CONFIG = {
-  // 프록시 서버 URL
-  PROXY_URL: 'http://localhost:3500',
+  // 프록시 서버 URL (Vercel 환경에서는 동일 도메인이므로 비워둡니다. 상대경로 '/api/...' 처리됨)
+  PROXY_URL: '',
 
   // 네이버 Maps Client ID (네이버 클라우드 플랫폼에서 발급)
   NAVER_MAP_CLIENT_ID: 'YOUR_NAVER_MAP_CLIENT_ID',

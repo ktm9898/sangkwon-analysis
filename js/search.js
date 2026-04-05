@@ -75,21 +75,9 @@ const SearchManager = (() => {
 
       if (!mapx || !mapy) return null;
 
-      // KATECH(TM128) → WGS84 변환
-      let lat, lng;
-
-      if (typeof naver !== 'undefined' && naver.maps && naver.maps.TransCoord) {
-        // 네이버 지도 API의 좌표 변환 유틸리티 사용
-        const tm128 = new naver.maps.Point(mapx, mapy);
-        const wgs84 = naver.maps.TransCoord.fromTM128ToLatLng(tm128);
-        lat = wgs84.lat();
-        lng = wgs84.lng();
-      } else {
-        // 폴백: 간이 변환 (네이버 검색 API의 mapx/mapy는 KATECH 좌표)
-        // 대략적인 변환이므로 정밀도가 떨어질 수 있음
-        lat = mapy / 10000000;
-        lng = mapx / 10000000;
-      }
+      // 네이버 검색 API의 mapx, mapy는 WGS84 좌표에 10^7을 곱한 값
+      const lat = mapy / 10000000;
+      const lng = mapx / 10000000;
 
       // 유효 좌표 범위 체크 (한국 범위)
       if (lat < 33 || lat > 43 || lng < 124 || lng > 132) {

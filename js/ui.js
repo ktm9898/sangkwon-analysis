@@ -141,7 +141,7 @@ const UiManager = (() => {
           <span class="card-title">📖 지도 범례 (분석 기준)</span>
         </div>
         <div style="font-size: 13px; color: #4a4e6a; line-height: 1.6; margin-top: 8px;">
-          <div><span style="display:inline-block; width:12px; height:12px; background:rgba(255,107,107,0.2); border:2px solid ${bt.color}; vertical-align:middle; margin-right:4px;"></span> <strong>다각형:</strong> 실제 도보 <strong>${bt.isochroneTime / 60}분</strong> 내 진입 가능한 핵심 상권</div>
+          <div><span style="display:inline-block; width:12px; height:12px; background:rgba(255,107,107,0.2); border:2px solid ${bt.color.primary || bt.color}; vertical-align:middle; margin-right:4px;"></span> <strong>다각형:</strong> 실제 도보 <strong>${Math.round(bt.isochrone.primary / 60)}분</strong> 내 진입 가능한 핵심 상권</div>
           <div style="margin-top:4px;"><span style="display:inline-block; width:12px; height:12px; background:rgba(160,163,184,0.2); border:1px dashed #a0a3b8; border-radius:50%; vertical-align:middle; margin-right:4px;"></span> <strong>원형:</strong> 기존 경쟁업체의 상권력 (반경 ${bt.competitorRadius}m)</div>
         </div>
       </div>

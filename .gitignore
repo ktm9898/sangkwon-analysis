@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Environment variables (API keys)
+server/.env
+
+# OS files
+.DS_Store
+Thumbs.db

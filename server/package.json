@@ -1,0 +1,16 @@
+{
+  "name": "sangkwon-proxy",
+  "version": "1.0.0",
+  "description": "상권분석 앱 CORS 프록시 서버",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js",
+    "dev": "node proxy.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.7.0",
+    "dotenv": "^16.4.0"
+  }
+}

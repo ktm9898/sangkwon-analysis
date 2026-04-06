@@ -56,19 +56,17 @@ const SearchManager = (() => {
       : [bt.keyword];
 
     const allItems = [];
-    const searchPromises = [];
-
-    keywordsToSearch.forEach((subKey) => {
+    
+    // 429 방지를 위해 키워드별로 병렬이 아닌 순차적으로 검색 시도
+    for (const subKey of keywordsToSearch) {
       const exactQuery = regionName ? `${regionName} ${subKey}` : subKey;
-      searchPromises.push(executeNaverSearch(exactQuery, allItems, onProgress));
+      await executeNaverSearch(exactQuery, allItems, onProgress);
 
       if (regionName && regionName.match(/[0-9]+가$/)) {
         const broadRegion = regionName.replace(/[0-9]+가$/, '');
-        searchPromises.push(executeNaverSearch(`${broadRegion} ${subKey}`, allItems, onProgress));
+        await executeNaverSearch(`${broadRegion} ${subKey}`, allItems, onProgress);
       }
-    });
-
-    await Promise.all(searchPromises);
+    }
 
     const competitors = allItems
       .map(item => convertNaverItem(item))
@@ -205,8 +203,8 @@ const SearchManager = (() => {
         const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(q)}&display=${DISPLAY}&start=${start}&sort=sim&_cb=${Date.now()}`;
         
         try {
-          // 429 방지를 위해 요청 당 150ms 대기
-          await wait(150);
+          // 429 방지를 위해 요청 당 250ms 대기 (더욱 안전하게)
+          await wait(250);
           
           const response = await fetch(url);
           

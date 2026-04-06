@@ -185,15 +185,21 @@ app.post('/api/ai-scan', async (req, res) => {
       } else {
         const errText = await mapResp.text();
         console.warn('[AI스캔] Static Map 실패:', mapResp.status, errText);
+        
+        let customError = `NCP에서 사진을 안 줍니다(HTTP ${mapResp.status}). `;
+        if (errText.includes('AuthenticationFailed')) customError += 'NCP [Client ID/Secret]이 틀렸습니다.';
+        else if (errText.includes('NotAllowedLocation')) customError += 'NCP 콘솔의 [Web 설정]에 현재 도메인을 등록하세요.';
+        else if (errText.includes('QuotaExceeded')) customError += 'NCP [Static Map] 무료 쿼터를 모두 소진했습니다.';
+        else customError += 'NCP 콘솔에서 [Static Map] 서비스가 켜져 있는지 확인하세요.';
+        
+        return res.status(502).json({ error: customError });
       }
     } catch (e) {
-      console.warn('[AI스캔] Static Map 요청 오류:', e.message);
+      console.error('[AI스캔] Static Map 요청 중 치명적 오류:', e.message);
+      return res.status(500).json({ error: '이미지 서버 연결 실패: ' + e.message });
     }
 
-    if (!imageBase64) {
-      console.warn('[AI스캔] 이미지 데이터가 비어 있습니다. NCP 인증 또는 Static Map 설정을 확인하세요.');
-      return res.status(502).json({ error: '지도 이미지를 가져올 수 없습니다. NCP 콘솔에서 Static Map 서비스 활성화 및 NAVER_MAP_SECRET 설정을 확인하세요.' });
-    }
+    if (!imageBase64) return; // 위에서 이미 리턴됨
 
     // Step 2: Gemini Vision API로 점포명 추출
     const brands = BRAND_CONTEXT[keyword] || '';

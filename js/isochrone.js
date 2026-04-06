@@ -48,21 +48,26 @@ const IsochroneManager = (() => {
 
   /**
    * 등시선 데이터 요청
-   * @returns {Array} GeoJSON Feature 배열 [3차, 2차, 1차] (큰 것부터)
+   * @param {number} lat
+   * @param {number} lng
+   * @param {string} businessType
+   * @param {{ primary, secondary, tertiary } | null} isoOverride - 슬라이더로 조정된 값(초 단위), 없으면 config 기본값
+   * @returns {Array} GeoJSON Feature 배열
    */
-  async function getIsochrone(lat, lng, businessType) {
+  async function getIsochrone(lat, lng, businessType, isoOverride) {
     const bt = CONFIG.BUSINESS_TYPES[businessType];
     if (!bt) throw new Error('알 수 없는 업종: ' + businessType);
 
-    // 캐시 확인
-    const cacheKey = getCacheKey(lat, lng, businessType);
+    const iso = isoOverride || bt.isochrone;
+    const range = [iso.primary, iso.secondary, iso.tertiary];
+
+    // 캐시 키에 range 포함 (슬라이더 값이 다르면 다른 캐시)
+    const cacheKey = getCacheKey(lat, lng, businessType) + `_${range.join('_')}`;
     const cached = getFromLocalCache(cacheKey);
     if (cached) {
       console.log('[등시선] 로컬 캐시 HIT');
       return cached;
     }
-
-    const range = [bt.isochrone.primary, bt.isochrone.secondary, bt.isochrone.tertiary];
 
     const response = await fetch(`${CONFIG.PROXY_URL}/api/isochrone`, {
       method: 'POST',
@@ -78,12 +83,11 @@ const IsochroneManager = (() => {
     const data = await response.json();
 
     // ORS는 features를 range 역순(큰것→작은것)으로 반환
-    // 지도에 그릴 때도 큰 것 먼저 그려야 작은 것이 위에 표시됨
     const features = data.features || [];
 
     // 캐시 저장
     setLocalCache(cacheKey, features);
-    console.log(`[등시선] ${features.length}개 범위 수신`);
+    console.log(`[등시선] ${features.length}개 범위 수신 (${range.map(r => Math.round(r/60)+'분').join('/')})`);
 
     return features;
   }

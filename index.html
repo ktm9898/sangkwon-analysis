@@ -14,29 +14,172 @@
     <div id="map-container">
       <div id="map"></div>
 
-      <!-- Map Overlay Controls -->
-      <div class="map-controls">
-        <!-- 업종 선택 -->
-        <div class="control-card">
-          <div class="control-label">업종 선택</div>
-          <div class="business-selector" id="business-selector"></div>
+      <!-- ===== 3탭 Control Panel ===== -->
+      <div class="control-panel" id="control-panel">
+        <!-- 패널 헤더 -->
+        <div class="panel-header">
+          <div class="panel-title">🏪 나는 사장</div>
+          <button class="panel-toggle" id="panel-toggle" title="패널 접기/펼치기">▲</button>
         </div>
 
-        <!-- 선택한 좌표 -->
-        <div class="control-card">
-          <div class="control-label">분석 기준점</div>
-          <div class="coord-display empty" id="coord-display">
-            <span class="dot"></span>
-            <span>지도를 클릭하여 기준점을 선택하세요</span>
+        <!-- 탭 네비게이션 -->
+        <div class="tab-nav">
+          <button class="tab-nav-item active" id="tab-nav-business" data-tab="business">
+            <span class="tab-nav-icon">🏬</span>
+            <span class="tab-nav-label">업종선택</span>
+          </button>
+          <button class="tab-nav-item" id="tab-nav-location" data-tab="location">
+            <span class="tab-nav-icon">📍</span>
+            <span class="tab-nav-label">기준점</span>
+          </button>
+          <button class="tab-nav-item" id="tab-nav-competitors" data-tab="competitors">
+            <span class="tab-nav-icon">🔍</span>
+            <span class="tab-nav-label">경쟁점포</span>
+          </button>
+        </div>
+
+        <!-- 탭 컨텐츠 영역 -->
+        <div class="tab-content">
+
+          <!-- ===== 탭1: 업종 선택 ===== -->
+          <div class="tab-pane active" id="tab-business">
+            <div class="tab-section-label">업종</div>
+            <div class="business-selector" id="business-selector"></div>
+            <div class="selected-business-info" id="selected-business-info" style="display:none">
+              <span class="selected-badge" id="selected-business-badge"></span>
+              <span class="selected-text" id="selected-business-text"></span>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <!-- 분석 시작 버튼 -->
-      <button class="analyze-btn" id="analyze-btn" disabled>
-        <span class="spinner"></span>
-        <span class="btn-text">🔍 상권 분석 시작</span>
-      </button>
+          <!-- ===== 탭2: 분석 기준점 ===== -->
+          <div class="tab-pane" id="tab-location">
+            <div class="tab-section-label">위치 설정</div>
+
+            <!-- 주소 검색 -->
+            <div class="address-search-wrap">
+              <div class="address-search">
+                <input type="text" id="address-input" class="address-input" placeholder="주소 또는 장소 검색">
+                <button class="address-search-btn" id="address-search-btn" title="검색">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="address-results" id="address-results" style="display:none"></div>
+            </div>
+
+            <div class="divider-text">또는</div>
+
+            <!-- 클릭 선택 토글 -->
+            <label class="toggle-row" id="map-click-toggle-row">
+              <span class="toggle-row-label">지도에서 직접 위치 선택</span>
+              <div class="toggle-switch" id="map-click-toggle">
+                <div class="toggle-knob"></div>
+              </div>
+            </label>
+
+            <!-- 현재 선택 위치 표시 -->
+            <div class="location-display" id="location-display">
+              <div class="location-display-inner empty" id="location-display-inner">
+                <span class="location-dot"></span>
+                <span class="location-text" id="location-text">기준점이 선택되지 않았습니다</span>
+              </div>
+              <div class="location-address" id="location-address" style="display:none"></div>
+            </div>
+
+            <!-- 등시선 설정 -->
+            <div class="tab-section-label" style="margin-top:16px">등시선 (도보 범위)</div>
+
+            <div class="slider-group" id="isochrone-sliders">
+              <div class="slider-row">
+                <input type="checkbox" id="iso-primary-chk" checked disabled style="margin-right: -4px;">
+                <span class="slider-label">1차 상권</span>
+                <input type="range" class="range-slider" id="iso-primary"
+                  min="1" max="15" step="1" value="3">
+                <span class="slider-value" id="iso-primary-val">3분</span>
+              </div>
+              <div class="slider-row">
+                <input type="checkbox" id="iso-secondary-chk" checked style="margin-right: -4px; cursor: pointer;">
+                <span class="slider-label">2차 상권</span>
+                <input type="range" class="range-slider" id="iso-secondary"
+                  min="3" max="30" step="1" value="7">
+                <span class="slider-value" id="iso-secondary-val">7분</span>
+              </div>
+              <div class="slider-row">
+                <input type="checkbox" id="iso-tertiary-chk" checked style="margin-right: -4px; cursor: pointer;">
+                <span class="slider-label">3차 상권</span>
+                <input type="range" class="range-slider" id="iso-tertiary"
+                  min="5" max="60" step="5" value="12">
+                <span class="slider-value" id="iso-tertiary-val">12분</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 탭3: 경쟁점포 ===== -->
+          <div class="tab-pane" id="tab-competitors">
+            <!-- 자동 탐색 버튼 -->
+            <div class="competitor-auto-section">
+              <button class="scan-btn" id="scan-btn" disabled>
+                <span class="scan-spinner" id="scan-spinner"></span>
+                <span>🤖 AI + API 자동 탐색</span>
+              </button>
+              <div class="scan-status" id="scan-status"></div>
+            </div>
+
+            <!-- 수동 검색 추가 -->
+            <div class="tab-section-label" style="margin-top:14px">수동 검색/추가</div>
+            <div class="address-search-wrap">
+              <div class="address-search">
+                <input type="text" id="manual-search-input" class="address-input" placeholder="업체명 검색">
+                <button class="address-search-btn" id="manual-search-btn" title="검색">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="address-results" id="manual-search-results" style="display:none"></div>
+            </div>
+
+            <!-- 반경 원 크기 슬라이더 -->
+            <div class="tab-section-label" style="margin-top:14px">반경 원 크기</div>
+            <div class="slider-group">
+              <div class="slider-row">
+                <span class="slider-label">반경</span>
+                <input type="range" class="range-slider" id="competitor-radius-slider"
+                  min="100" max="1500" step="50" value="300">
+                <span class="slider-value" id="competitor-radius-val">300m</span>
+              </div>
+            </div>
+
+            <!-- 탐색된 경쟁점포 리스트 -->
+            <div class="tab-section-label" style="margin-top:14px">
+              탐색된 점포
+              <span class="competitor-count-badge" id="competitor-count-badge">0개</span>
+            </div>
+            <div class="competitor-list" id="competitor-list">
+              <div class="competitor-empty">
+                <span>🏬</span>
+                <p>아직 탐색된 점포가 없습니다.<br>자동 탐색 또는 수동 검색으로 추가하세요.</p>
+              </div>
+            </div>
+
+            <!-- 전체 반경원 토글 -->
+            <div class="circle-toggle-bar" id="circle-toggle-bar" style="display:none">
+              <button class="circle-toggle-all-btn" id="circle-show-all">🔵 전체 표시</button>
+              <button class="circle-toggle-all-btn secondary" id="circle-hide-all">⚪ 전체 숨김</button>
+            </div>
+          </div>
+
+        </div><!-- /tab-content -->
+
+        <!-- 분석 시작 버튼 -->
+        <div class="panel-footer">
+          <button class="analyze-btn" id="analyze-btn" disabled>
+            <span class="spinner"></span>
+            <span class="btn-text">🔍 상권 분석 시작</span>
+          </button>
+        </div>
+      </div><!-- /control-panel -->
     </div>
 
     <!-- ===== Sidebar ===== -->
@@ -84,11 +227,9 @@
   <script>
     // 네이버 Maps 로드 후 앱 초기화
     document.addEventListener('DOMContentLoaded', () => {
-      // naver.maps가 로드될 때까지 대기
       if (typeof naver !== 'undefined' && naver.maps) {
         App.init();
       } else {
-        // 폴백: Maps API가 아직 로드되지 않았을 때
         const checkMaps = setInterval(() => {
           if (typeof naver !== 'undefined' && naver.maps) {
             clearInterval(checkMaps);
@@ -96,7 +237,6 @@
           }
         }, 100);
 
-        // 10초 후에도 로드되지 않으면 에러
         setTimeout(() => {
           clearInterval(checkMaps);
           if (typeof naver === 'undefined' || !naver.maps) {

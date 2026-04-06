@@ -1,6 +1,6 @@
 /**
  * 상권분석 앱 — Vercel Serverless Function (Express API)
- * 네이버 검색 API + OpenRouteService API 프록시
+ * 네이버 검색 API + OpenRouteService API 프록시 + Gemini Vision AI 스캔
  * + in-memory 캐시
  */
 require('dotenv').config();
@@ -12,7 +12,7 @@ const app = express();
 
 // CORS 허용 (모든 도메인 또는 배포 도메인)
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // ================================================================
 // In-memory 캐시 (Serverless 환경 특성상 인스턴스별 한시 유지됨)
@@ -44,23 +44,25 @@ function setCache(key, data) {
 }
 
 // 환경변수에서 키 읽기
-const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || 'KOMV43YztpF2nsWry0Xz';
-const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || 'VEZ_zQJkj8';
+const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || '';
+const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || '';
 const ORS_API_KEY = process.env.ORS_API_KEY || '';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const NAVER_MAP_CLIENT_ID = process.env.NAVER_MAP_CLIENT_ID || 'u5mtazxcnw';
 
 /**
  * [GET] 네이버 지역검색 API 프록시
  */
 app.get('/api/search', async (req, res) => {
   try {
-    const { query, display = 5, start = 1 } = req.query;
+    const { query, display = 30, start = 1 } = req.query;
     if (!query) return res.status(400).json({ error: 'query 파라미터가 필요합니다' });
 
     const cacheKey = getCacheKey('search', { query, display, start });
     const cached = getFromCache(cacheKey);
     if (cached) return res.json(cached);
 
-    const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=${display}&start=${start}&sort=random`;
+    const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=${display > 5 ? 5 : display}&start=${start}&sort=sim`;
     const response = await fetch(url, {
       headers: {
         'X-Naver-Client-Id': NAVER_CLIENT_ID,
@@ -112,6 +114,141 @@ app.post('/api/isochrone', async (req, res) => {
     setCache(cacheKey, data);
     res.json(data);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * [POST] AI 지도 스캔 — 네이버 Static Map + Gemini Vision
+ * 기준점 좌표 + 업종 → 지도 이미지 → Gemini가 점포명 추출
+ */
+app.post('/api/ai-scan', async (req, res) => {
+  try {
+    const { lat, lng, businessType, keyword, zoom = 17 } = req.body;
+    if (!lat || !lng || !keyword) {
+      return res.status(400).json({ error: '파라미터 누락 (lat, lng, keyword)' });
+    }
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'Gemini API Key가 설정되지 않았습니다' });
+    }
+
+    // 캐시 키 (좌표 소수점 4자리 = 약 11m 정밀도)
+    const cacheKey = getCacheKey('ai-scan', {
+      lat: +lat.toFixed(4), lng: +lng.toFixed(4), businessType, zoom
+    });
+    const cached = getFromCache(cacheKey);
+    if (cached) {
+      console.log('[AI스캔] 캐시 HIT');
+      return res.json(cached);
+    }
+
+    // Step 1: 네이버 Static Map API로 지도 이미지 요청 (복수 줌 레벨)
+    const mapWidth = 640;
+    const mapHeight = 640;
+
+    // Static Map URL (네이버 지도 Static API) - 시야 대폭 확대를 위해 zoom-2 사용
+    const staticMapUrl = `https://naveropenapi.apigw.ntruss.com/map-static/v2/raster?center=${lng},${lat}&level=${zoom - 2}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=2`;
+
+    let imageBase64 = null;
+    try {
+      const mapResp = await fetch(staticMapUrl, {
+        headers: {
+          'X-NCP-APIGW-API-KEY-ID': NAVER_MAP_CLIENT_ID,
+          'X-NCP-APIGW-API-KEY': process.env.NAVER_MAP_SECRET || ''
+        }
+      });
+
+      if (mapResp.ok) {
+        const mapBuffer = await mapResp.buffer();
+        imageBase64 = mapBuffer.toString('base64');
+        console.log(`[AI스캔] Static Map 이미지 획득 (${mapBuffer.length} bytes)`);
+      } else {
+        const errText = await mapResp.text();
+        console.warn('[AI스캔] Static Map 실패:', mapResp.status, errText);
+      }
+    } catch (e) {
+      console.warn('[AI스캔] Static Map 요청 오류:', e.message);
+    }
+
+    if (!imageBase64) {
+      console.warn('[AI스캔] 이미지 데이터가 비어 있습니다. NCP 인증 또는 Static Map 설정을 확인하세요.');
+      return res.status(502).json({ error: '지도 이미지를 가져올 수 없습니다. NCP 콘솔에서 Static Map 서비스 활성화 및 NAVER_MAP_SECRET 설정을 확인하세요.' });
+    }
+
+    // Step 2: Gemini Vision API로 점포명 추출
+    const prompt = `이 이미지는 한국 도시의 정밀 지도입니다. 
+당신은 상권 분석 전문가로서, 이 지도 이미지에서 "${keyword}" 업종에 해당하는 모든 가게/매장/점포의 이름을 하나도 빠짐없이 찾아내야 합니다.
+
+**분석 가이드라인:**
+1. **정밀 스캔**: 지도를 상하좌우 4분면으로 나누어 작은 글자 하나하나 꼼꼼히 확인하세요. 지하철역 주변이나 대로변의 밀집된 상점들을 특히 유의해서 보세요.
+2. **대상**: "${keyword}"(관련 브랜드 포함) 업소명만 추출하세요. 
+3. **제외 대상**: 
+   - 단순 주소(번지수), 지하철역명, 공공기관명, 도로명.
+   - 글자가 너무 흐릿하거나 잘려서 식별이 불가능한 경우.
+4. **결과 형식**: 오직 JSON 배열 형식으로만 응답하세요. 예: ["CU 숙대입구점", "GS25 청파로점", ...]
+5. **언어**: 한국어 텍스트를 정확하게 읽어내세요.
+
+반드시 JSON 배열([])만 출력하고, 다른 설명은 하지 마세요.`;
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+
+    const geminiPayload = {
+      contents: [{
+        role: "user",
+        parts: [
+          { text: prompt },
+          {
+            inline_data: {
+              mime_type: 'image/jpeg',
+              data: imageBase64
+            }
+          }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 2048,
+        response_mime_type: "application/json"
+      }
+    };
+
+    const geminiResp = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(geminiPayload)
+    });
+
+    if (!geminiResp.ok) {
+      const errData = await geminiResp.json();
+      console.error('[AI스캔] Gemini API 오류:', errData);
+      return res.status(502).json({ error: 'Gemini API 오류: ' + (errData.error?.message || '알 수 없는 오류') });
+    }
+
+    const geminiData = await geminiResp.json();
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+
+    // JSON 파싱 (Gemini가 ```json ... ``` 형태로 반환할 수 있음)
+    let storeNames = [];
+    try {
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        storeNames = JSON.parse(jsonMatch[0]);
+      }
+    } catch (e) {
+      console.warn('[AI스캔] JSON 파싱 실패:', rawText);
+    }
+
+    // 유효성 검사 (문자열 배열)
+    storeNames = storeNames.filter(s => typeof s === 'string' && s.trim().length > 0);
+
+    console.log(`[AI스캔] Gemini 추출 점포명 ${storeNames.length}개:`, storeNames);
+
+    const result = { storeNames, zoom };
+    setCache(cacheKey, result);
+    res.json(result);
+
+  } catch (error) {
+    console.error('[AI스캔] 오류:', error);
     res.status(500).json({ error: error.message });
   }
 });

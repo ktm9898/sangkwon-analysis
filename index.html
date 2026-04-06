@@ -228,59 +228,64 @@
      */
     async function initAppWithDynamicConfig() {
       try {
+        console.log('🔍 지도 설정 가져오는 중...');
         // 1. 백엔드에서 환경변수(MAP ID) 가져오기
         const configRes = await fetch('/api/config');
-        if (!configRes.ok) throw new Error('설정 정보를 가져올 수 없습니다.');
+        if (!configRes.ok) {
+           const errText = await configRes.text();
+           throw new Error(`백엔드 설정 오류: ${configRes.status} (${errText})`);
+        }
         const config = await configRes.json();
         const clientId = config.naverMapClientId;
 
         if (!clientId || clientId === 'YOUR_NCP_CLIENT_ID' || clientId === 'u5mtazxcnw') {
-          showMapError('네이버 지도 Client ID가 설정되지 않았습니다.');
+          showMapError('네이버 지도 Client ID가 비어있거나 잘못되었습니다.', 'Vercel 환경변수 (NAVER_MAP_CLIENT_ID)를 확인해 주세요.');
           return;
         }
 
+        console.log('✅ 맵 ID 감지 성공, SDK 로드 중...');
         // 2. 네이버 지도 SDK 스크립트 생성 및 로드
         const script = document.createElement('script');
         script.type = 'text/javascript';
-        // geocoder 서브모듈 필수
         script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}&submodules=geocoder`;
         
         script.onload = () => {
-          console.log('✅ 네이버 지도 SDK 로드 완료');
+          console.log('✅ 지도 SDK 로드 완료');
           const checkMaps = setInterval(() => {
             if (typeof naver !== 'undefined' && naver.maps) {
               clearInterval(checkMaps);
               App.init();
             }
-          }, 50);
+          }, 100);
         };
 
         script.onerror = () => {
-          showMapError('지도 SDK 로드 중 오류가 발생했습니다.');
+          showMapError('지도 SDK 로드 중 네트워크 오류가 발생했습니다.', 'NCP 콘솔의 [Web 설정]에 현재 도메인이 등록되어 있는지 확인해 주세요.');
         };
 
         document.head.appendChild(script);
 
       } catch (err) {
         console.error('App 초기화 오류:', err);
-        showMapError('서버 연결 실패 또는 설정 오류가 발생했습니다.');
+        showMapError('서버 연결 실패 혹은 설정 오류가 발생했습니다.', err.message);
       }
     }
 
-    function showMapError(msg) {
+    function showMapError(title, msg) {
       document.getElementById('map').innerHTML = `
         <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #f5f6fa; color: #1a1d2e; font-family: 'Inter', sans-serif; text-align: center; padding: 40px;">
           <div>
-            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
-            <h2 style="margin-bottom: 8px;">지도 로드 실패</h2>
-            <p style="color: #4a4e6a; font-size: 14px; line-height: 1.6;">
-              <b>${msg}</b><br><br>
-              <span style="font-weight: 600; color: #4834d4;">🛠️ 해결 방법 (네이버 클라우드 설정)</span><br>
-              1. NCP 콘솔 -> Maps -> Application 선택<br>
-              2. <b>[Web 설정]</b> 버튼 클릭<br>
-              3. 현재 사이트 주소(<b>${window.location.hostname}</b>)를 등록했는지 확인<br>
-              4. <b>NAVER_MAP_CLIENT_ID</b> 환경변수 값이 정확한지 확인
-            </p>
+            <div style="font-size: 48px; margin-bottom: 24px;">⛔</div>
+            <h2 style="margin-bottom: 12px; color: #eb4d4b;">${title}</h2>
+            <div style="background: #ffffff; padding: 24px; border-radius: 12px; border: 1px solid #dcdde1; text-align: left; max-width: 450px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+              <p style="color: #2f3640; font-weight: 600; margin-bottom: 8px;">🛠️ 해결 가이드:</p>
+              <ol style="margin: 0; padding-left: 20px; color: #4a4e6a; font-size: 14px; line-height: 1.8;">
+                <li>NCP 콘솔 -> Maps -> Application -> <b>[Web 설정]</b></li>
+                <li>현재 주소(<b>${window.location.hostname}</b>)를 추가했나요?</li>
+                <li>Vercel 환경변수명은 <b>NAVER_MAP_CLIENT_ID</b> 인가요?</li>
+                <li>에러 상세: <code style="background: #f1f2f6; padding: 2px 4px; color: #e84118;">${msg}</code></li>
+              </ol>
+            </div>
           </div>
         </div>
       `;

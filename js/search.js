@@ -189,20 +189,33 @@ const SearchManager = (() => {
   // 내부 헬퍼 함수들
   // ============================================================
 
+  // 지연 함수 (429 방지용)
+  const wait = (ms) => new Promise(res => setTimeout(res, ms));
+
   async function executeNaverSearch(keyword, allItems, onProgress) {
     const queries = [keyword, `근처 ${keyword}`, `주변 ${keyword}`];
     if (onProgress) onProgress(`🔍 네이버 API 정밀 수색 중...`);
 
     for (const q of queries) {
-      const DISPLAY = 5; // 네이버 표준 규격 (최대 5)
-      const PAGES = 15;  // 규격 내에서 페이지를 늘려 많이 수집
+      const DISPLAY = 5; 
+      const PAGES = 10;  // 15에서 10으로 조정하여 속도 조절
       
       for (let i = 0; i < PAGES; i++) {
         const start = (i * DISPLAY) + 1;
         const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(q)}&display=${DISPLAY}&start=${start}&sort=sim&_cb=${Date.now()}`;
         
         try {
+          // 429 방지를 위해 요청 당 150ms 대기
+          await wait(150);
+          
           const response = await fetch(url);
+          
+          if (response.status === 429) {
+            if (onProgress) onProgress(`⏳ API 속도 제한 발생, 잠시 대기 중...`);
+            await wait(1000); // 1초 대기 후 재시도 없음(다음 쿼리로)
+            break;
+          }
+
           if (!response.ok) break;
           const data = await response.json();
           if (data.items && data.items.length > 0) {

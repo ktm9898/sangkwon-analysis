@@ -271,10 +271,15 @@
       document.getElementById('map').innerHTML = `
         <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #f5f6fa; color: #1a1d2e; font-family: 'Inter', sans-serif; text-align: center; padding: 40px;">
           <div>
-            <div style="font-size: 48px; margin-bottom: 16px;">🗺️</div>
-            <h2 style="margin-bottom: 8px;">지도를 불러올 수 없습니다</h2>
-            <p style="color: #4a4e6a; font-size: 14px;">${msg}<br>
-              <code style="background: #eef0f6; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Vercel Environment Variables -> NAVER_MAP_CLIENT_ID</code>
+            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+            <h2 style="margin-bottom: 8px;">지도 로드 실패</h2>
+            <p style="color: #4a4e6a; font-size: 14px; line-height: 1.6;">
+              <b>${msg}</b><br><br>
+              <span style="font-weight: 600; color: #4834d4;">🛠️ 해결 방법 (네이버 클라우드 설정)</span><br>
+              1. NCP 콘솔 -> Maps -> Application 선택<br>
+              2. <b>[Web 설정]</b> 버튼 클릭<br>
+              3. 현재 사이트 주소(<b>${window.location.hostname}</b>)를 등록했는지 확인<br>
+              4. <b>NAVER_MAP_CLIENT_ID</b> 환경변수 값이 정확한지 확인
             </p>
           </div>
         </div>

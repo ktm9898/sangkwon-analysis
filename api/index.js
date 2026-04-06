@@ -48,7 +48,15 @@ const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || '';
 const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || '';
 const ORS_API_KEY = process.env.ORS_API_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const NAVER_MAP_CLIENT_ID = process.env.NAVER_MAP_CLIENT_ID || 'u5mtazxcnw';
+const NAVER_MAP_CLIENT_ID = process.env.NAVER_MAP_CLIENT_ID;
+const NAVER_MAP_SECRET = process.env.NAVER_MAP_SECRET;
+
+// 서버 시작 시 환경변수 로딩 상태 확인 (보안상 일부만 노출)
+if (NAVER_MAP_CLIENT_ID) {
+  console.log('✅ NAVER_MAP_CLIENT_ID 감지됨:', NAVER_MAP_CLIENT_ID.substring(0, 3) + '***');
+} else {
+  console.warn('⚠️ NAVER_MAP_CLIENT_ID가 설정되지 않았습니다 (NCP Maps)');
+}
 
 /**
  * [GET] 네이버 지역검색 API 프록시

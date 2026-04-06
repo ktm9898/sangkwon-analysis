@@ -176,8 +176,8 @@ const SearchManager = (() => {
   // ============================================================
 
   async function executeNaverSearch(query, allItems) {
-    const PAGES = 10; // 키워드당 10페이지 수집 (10 * 5 = 50개)
-    const DISPLAY = 5; // 네이버 로컬 API 한도
+    const PAGES = 15; // 키워드당 15페이지 수집 (15 * 10 = 150개)
+    const DISPLAY = 10; // 네이버 로컬 API 한도
 
     for (let i = 0; i < PAGES; i++) {
       const start = (i * DISPLAY) + 1;
@@ -190,7 +190,7 @@ const SearchManager = (() => {
         const data = await response.json();
         if (data.items && data.items.length > 0) {
           allItems.push(...data.items);
-          if (data.items.length < DISPLAY) break; // 결과가 5개 미만이면 다음 페이지 없음
+          if (data.items.length < DISPLAY) break; // 결과가 10개 미만이면 다음 페이지 없음
         } else {
           break;
         }

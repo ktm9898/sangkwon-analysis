@@ -51,6 +51,16 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const NAVER_MAP_CLIENT_ID = process.env.NAVER_MAP_CLIENT_ID;
 const NAVER_MAP_SECRET = process.env.NAVER_MAP_SECRET;
 
+// 상권별 대표 브랜드 (Gemini가 업종명만 보고 브랜드를 놓치지 않게 가이드)
+const BRAND_CONTEXT = {
+  '편의점': 'CU, GS25, 세븐일레븐, 이마트24, 미니스톱',
+  '카페': '스타벅스, 투썸플레이스, 메가커피, 컴포즈커피, 이디야, 빽다방',
+  '음식점': '맥도날드, 롯데리아, 버거킹, 서브웨이, BBQ, BHC',
+  '미용실': '리안헤어, 준오헤어, 박승철헤어스투디오',
+  '세탁소': '크린토피아, 월드크리닝',
+  '학원': '보습학원, 코딩학원, 보습학원, 태권도장, 피아노학원'
+};
+
 // 서버 시작 시 환경변수 로딩 상태 확인 (보안상 일부만 노출)
 if (NAVER_MAP_CLIENT_ID) {
   console.log('✅ NAVER_MAP_CLIENT_ID 감지됨:', NAVER_MAP_CLIENT_ID.substring(0, 3) + '***');
@@ -70,7 +80,7 @@ app.get('/api/search', async (req, res) => {
     const cached = getFromCache(cacheKey);
     if (cached) return res.json(cached);
 
-    const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=${display > 5 ? 5 : display}&start=${start}&sort=sim`;
+    const url = `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=${display > 30 ? 30 : display}&start=${start}&sort=sim`;
     const response = await fetch(url, {
       headers: {
         'X-Naver-Client-Id': NAVER_CLIENT_ID,
@@ -154,8 +164,10 @@ app.post('/api/ai-scan', async (req, res) => {
     const mapWidth = 640;
     const mapHeight = 640;
 
-    // Static Map URL (네이버 지도 Static API) - 시야 대폭 확대를 위해 zoom-2 사용
-    const staticMapUrl = `https://naveropenapi.apigw.ntruss.com/map-static/v2/raster?center=${lng},${lat}&level=${zoom - 2}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=2`;
+    // Static Map URL (네이버 지도 Static API) - 시야와 선명도의 최적점인 zoom-1 사용
+    const staticMapUrl = `https://naveropenapi.apigw.ntruss.com/map-static/v2/raster?center=${lng},${lat}&level=${zoom - 1}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=2`;
+    
+    console.log('[AI스캔] 이미지 요청 URL:', staticMapUrl);
 
     let imageBase64 = null;
     try {
@@ -184,19 +196,16 @@ app.post('/api/ai-scan', async (req, res) => {
     }
 
     // Step 2: Gemini Vision API로 점포명 추출
-    const prompt = `이 이미지는 한국 도시의 정밀 지도입니다. 
-당신은 상권 분석 전문가로서, 이 지도 이미지에서 "${keyword}" 업종에 해당하는 모든 가게/매장/점포의 이름을 하나도 빠짐없이 찾아내야 합니다.
+    const brands = BRAND_CONTEXT[keyword] || '';
+    const prompt = `당신은 대한민국 상권 분석 전문가입니다. 
+제공된 지도 이미지에서 "${keyword}" 업종에 해당하는 모든 상점/점포 이름을 추출하세요.
 
-**분석 가이드라인:**
-1. **정밀 스캔**: 지도를 상하좌우 4분면으로 나누어 작은 글자 하나하나 꼼꼼히 확인하세요. 지하철역 주변이나 대로변의 밀집된 상점들을 특히 유의해서 보세요.
-2. **대상**: "${keyword}"(관련 브랜드 포함) 업소명만 추출하세요. 
-3. **제외 대상**: 
-   - 단순 주소(번지수), 지하철역명, 공공기관명, 도로명.
-   - 글자가 너무 흐릿하거나 잘려서 식별이 불가능한 경우.
-4. **결과 형식**: 오직 JSON 배열 형식으로만 응답하세요. 예: ["CU 숙대입구점", "GS25 청파로점", ...]
-5. **언어**: 한국어 텍스트를 정확하게 읽어내세요.
-
-반드시 JSON 배열([])만 출력하고, 다른 설명은 하지 마세요.`;
+**분석 지침:**
+1. **타켓 업종**: "${keyword}" (주요 브랜드: ${brands})
+2. **미션**: 지도에 텍스트로 표시된 모든 "${keyword}" 매장명을 찾아내세요. (예: "CU", "스타벅스", "김밥천국" 등)
+3. **정기성**: 글자가 작아도 선명하다면 반드시 포함하세요.
+4. **출력 형식**: 오직 JSON 배열로만 응답하세요. 예: ["매장A", "매장B", ...]
+5. **금지**: 설명이나 인삿말 없이 오직 JSON만 출력하세요.`;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
 

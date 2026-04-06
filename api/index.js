@@ -183,10 +183,13 @@ app.post('/api/ai-scan', async (req, res) => {
 
     let imageBase64 = null;
     try {
+      const currentOrigin = 'https://sangkwon-analysis.vercel.app';
       const mapResp = await fetch(staticMapUrl, {
         headers: {
           'X-NCP-APIGW-API-KEY-ID': NAVER_MAP_CLIENT_ID,
-          'X-NCP-APIGW-API-KEY': NAVER_MAP_CLIENT_SECRET
+          'X-NCP-APIGW-API-KEY': NAVER_MAP_CLIENT_SECRET,
+          'Referer': currentOrigin,
+          'User-Agent': 'Mozilla/5.0 (Vercel Node.js Serverless)'
         }
       });
 
@@ -196,13 +199,15 @@ app.post('/api/ai-scan', async (req, res) => {
         console.log(`[AI스캔] Static Map 이미지 획득 (${mapBuffer.length} bytes)`);
       } else {
         const errText = await mapResp.text();
-        console.warn('[AI스캔] Static Map 실패:', mapResp.status, errText);
+        const checkID = NAVER_MAP_CLIENT_ID ? `${NAVER_MAP_CLIENT_ID.substring(0,3)}...${NAVER_MAP_CLIENT_ID.slice(-3)}` : '비어있음';
+        const checkSecret = NAVER_MAP_CLIENT_SECRET ? `${NAVER_MAP_CLIENT_SECRET.substring(0,3)}...${NAVER_MAP_CLIENT_SECRET.slice(-3)}` : '비어있음';
         
-        let customError = `NCP에서 사진을 안 줍니다(HTTP ${mapResp.status}). `;
-        if (errText.includes('AuthenticationFailed')) customError += 'NCP [Client ID/Secret]이 틀렸습니다.';
-        else if (errText.includes('NotAllowedLocation')) customError += 'NCP 콘솔의 [Web 설정]에 현재 도메인을 등록하세요.';
-        else if (errText.includes('QuotaExceeded')) customError += 'NCP [Static Map] 무료 쿼터를 모두 소진했습니다.';
-        else customError += 'NCP 콘솔에서 [Static Map] 서비스가 켜져 있는지 확인하세요.';
+        let customError = `NCP 인증 거절 (HTTP ${mapResp.status}). `;
+        if (mapResp.status === 401) {
+          customError += `\n\n--- [진단 가이드] ---\n1. NCP 콘솔의 키와 대조하세요:\n   ID: ${checkID}\n   Secret: ${checkSecret}\n2. NCP 콘솔 [Web 설정]에 등록된 도메인이\n   "${currentOrigin}" 인지 확인하세요!`;
+        } else if (errText.includes('NotAllowedLocation')) {
+          customError += `도메인("${currentOrigin}")이 등록되지 않았습니다.`;
+        }
         
         return res.status(502).json({ error: customError });
       }
@@ -212,6 +217,12 @@ app.post('/api/ai-scan', async (req, res) => {
     }
 
     if (!imageBase64) return; // 위에서 이미 리턴됨
+    } catch (e) {
+      console.error('[AI스캔] Static Map 요청 중 치명적 오류:', e.message);
+      return res.status(500).json({ error: '이미지 서버 연결 실패: ' + e.message });
+    }
+
+    if (!imageBase64) return; 
 
     // Step 2: Gemini Vision API로 점포명 추출
     const brands = BRAND_CONTEXT[keyword] || '';

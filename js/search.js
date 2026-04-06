@@ -60,17 +60,20 @@ const SearchManager = (() => {
       : [bt.keyword];
 
     const allItems = [];
+    const searchPromises = [];
     
-    // 429 방지를 위해 키워드별로 병렬이 아닌 순차적으로 검색 시도
+    // 속도를 위해 다시 병렬 검색으로 전환
     for (const subKey of keywordsToSearch) {
       const exactQuery = regionName ? `${regionName} ${subKey}` : subKey;
-      await executeNaverSearch(exactQuery, allItems, onProgress);
+      searchPromises.push(executeNaverSearch(exactQuery, allItems, onProgress));
 
       if (regionName && regionName.match(/[0-9]+가$/)) {
         const broadRegion = regionName.replace(/[0-9]+가$/, '');
-        await executeNaverSearch(`${broadRegion} ${subKey}`, allItems, onProgress);
+        searchPromises.push(executeNaverSearch(`${broadRegion} ${subKey}`, allItems, onProgress));
       }
     }
+    
+    await Promise.all(searchPromises);
 
     const competitors = allItems
       .map(item => convertNaverItem(item))

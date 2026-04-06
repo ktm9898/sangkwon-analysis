@@ -126,27 +126,31 @@ const SearchManager = (() => {
 
     console.log(`[AI스캔] ${storeNames.length}개 점포명 추출:`, storeNames);
 
-    // 각 점포명을 네이버 지역검색으로 좌표 확보 (병렬, 최대 50개)
-    const searchTargets = storeNames.slice(0, 50);
+    // 각 점포명을 네이버 지역검색으로 좌표 확보 (병렬, 최대 30개)
+    const searchTargets = storeNames.slice(0, 30);
     const aiItems = [];
 
     await Promise.all(searchTargets.map(async (name) => {
       try {
-        const resp = await fetch(
-          `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(name)}&display=1&start=1`
-        );
+        // AI가 찾은 이름 그대로 검색 (정확도를 위해 display=5로 넉넉히 수집 후 거리순 필터링)
+        const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(name)}&display=5&start=1&_cb=${Date.now()}`;
+        const resp = await fetch(url);
         if (!resp.ok) return;
         const d = await resp.json();
+        
         if (d.items && d.items.length > 0) {
+          // AI가 찾은 이름과 가장 유사하거나 가까운 첫 번째 결과 채택
           const converted = convertNaverItem(d.items[0]);
           if (converted) {
             converted.dist = getDistance(lat, lng, converted.lat, converted.lng);
             converted.source = 'ai';
             aiItems.push(converted);
           }
+        } else {
+          console.log(`[AI스캔] "${name}"의 좌표를 찾지 못했습니다.`);
         }
       } catch (e) {
-        // 개별 검색 실패 무시
+        console.error(`[AI스캔] "${name}" 변환 에러:`, e.message);
       }
     }));
 

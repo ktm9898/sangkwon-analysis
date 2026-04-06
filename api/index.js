@@ -247,10 +247,8 @@ app.post('/api/ai-scan', async (req, res) => {
     // JSON 파싱 (Gemini가 ```json ... ``` 형태로 반환할 수 있음)
     let storeNames = [];
     try {
-      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        storeNames = JSON.parse(jsonMatch[0]);
-      }
+      const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      storeNames = JSON.parse(cleanJson);
     } catch (e) {
       console.warn('[AI스캔] JSON 파싱 실패:', rawText);
     }

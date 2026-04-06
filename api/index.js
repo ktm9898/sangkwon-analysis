@@ -216,13 +216,7 @@ app.post('/api/ai-scan', async (req, res) => {
       return res.status(500).json({ error: '이미지 서버 연결 실패: ' + e.message });
     }
 
-    if (!imageBase64) return; // 위에서 이미 리턴됨
-    } catch (e) {
-      console.error('[AI스캔] Static Map 요청 중 치명적 오류:', e.message);
-      return res.status(500).json({ error: '이미지 서버 연결 실패: ' + e.message });
-    }
-
-    if (!imageBase64) return; 
+    if (!imageBase64) return;
 
     // Step 2: Gemini Vision API로 점포명 추출
     const brands = BRAND_CONTEXT[keyword] || '';

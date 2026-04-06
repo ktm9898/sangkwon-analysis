@@ -89,28 +89,38 @@ const SearchManager = (() => {
   /**
    * Gemini Vision AI 지도 스캔 → 점포명 추출 → 좌표 변환
    */
-  async function scanMapWithAI(lat, lng, bt) {
+  async function scanMapWithAI(lat, lng, bt, onProgress) {
     const mapState = MapManager.getMapState();
     const zoom = Math.max(mapState ? mapState.zoom : CONFIG.AI_SCAN_ZOOM, 16);
 
-    const response = await fetch(`${CONFIG.PROXY_URL}/api/ai-scan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        lat, lng,
-        businessType: bt.keyword,
-        keyword: bt.keyword,
-        zoom
-      })
-    });
+    let storeNames = [];
+    try {
+      if (onProgress) onProgress(`🔍 AI 지도 정밀 스캔 중... (${bt.keyword})`);
+      
+      const response = await fetch(`${CONFIG.PROXY_URL}/api/ai-scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat, lng,
+          businessType: bt.keyword,
+          keyword: bt.keyword,
+          zoom
+        })
+      });
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'AI 스캔 API 오류');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      storeNames = data.storeNames || [];
+      if (onProgress) onProgress(`✅ AI 스캔 완료 (${storeNames.length}개 추가 발견)`);
+    } catch (e) {
+      console.warn('[AI스캔] 실패:', e.message);
+      if (onProgress) onProgress(`⚠️ AI 스캔 실패: ${e.message}`);
+      return [];
     }
-
-    const data = await response.json();
-    const storeNames = data.storeNames || [];
 
     if (storeNames.length === 0) return [];
 

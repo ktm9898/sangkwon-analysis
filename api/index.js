@@ -253,6 +253,16 @@ app.post('/api/ai-scan', async (req, res) => {
   }
 });
 
+/**
+ * [GET] 공개 설정값 (네이버 지도 Client ID 등)
+ * 프론트엔드가 지도를 동적으로 로드할 때 사용
+ */
+app.get('/api/config', (req, res) => {
+  res.json({
+    naverMapClientId: NAVER_MAP_CLIENT_ID
+  });
+});
+
 // Vercel Serverless Function을 위해 express app을 export 합니다.
 module.exports = app;
 

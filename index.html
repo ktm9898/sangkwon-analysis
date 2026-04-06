@@ -207,9 +207,6 @@
   <div class="toast" id="toast"></div>
 
   <!-- ===== Scripts ===== -->
-  <!-- 네이버 Maps JS v3 -->
-  <script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=u5mtazxcnw&submodules=geocoder"></script>
-
   <!-- Turf.js (공간 분석) -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
 
@@ -225,44 +222,66 @@
   <script src="js/app.js"></script>
 
   <script>
-    // 네이버 Maps 로드 후 앱 초기화
-    document.addEventListener('DOMContentLoaded', () => {
-      if (typeof naver !== 'undefined' && naver.maps) {
-        App.init();
-      } else {
-        const checkMaps = setInterval(() => {
-          if (typeof naver !== 'undefined' && naver.maps) {
-            clearInterval(checkMaps);
-            App.init();
-          }
-        }, 100);
+    /**
+     * 네이버 지도 SDK 동적 로드
+     * 백엔드(/api/config)에서 클라이언트 ID를 가져와서 맵을 띄웁니다.
+     */
+    async function initAppWithDynamicConfig() {
+      try {
+        // 1. 백엔드에서 환경변수(MAP ID) 가져오기
+        const configRes = await fetch('/api/config');
+        if (!configRes.ok) throw new Error('설정 정보를 가져올 수 없습니다.');
+        const config = await configRes.json();
+        const clientId = config.naverMapClientId;
 
-        setTimeout(() => {
-          clearInterval(checkMaps);
-          if (typeof naver === 'undefined' || !naver.maps) {
-            document.getElementById('map').innerHTML = `
-              <div style="
-                display: flex; align-items: center; justify-content: center;
-                height: 100%; background: #f5f6fa; color: #1a1d2e;
-                font-family: 'Inter', sans-serif; text-align: center;
-                padding: 40px;
-              ">
-                <div>
-                  <div style="font-size: 48px; margin-bottom: 16px;">🗺️</div>
-                  <h2 style="margin-bottom: 8px;">지도를 불러올 수 없습니다</h2>
-                  <p style="color: #4a4e6a; font-size: 14px;">
-                    네이버 Maps Client ID를 설정해주세요.<br>
-                    <code style="background: #eef0f6; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
-                      index.html → ncpKeyId=YOUR_NAVER_MAP_CLIENT_ID
-                    </code>
-                  </p>
-                </div>
-              </div>
-            `;
-          }
-        }, 10000);
+        if (!clientId || clientId === 'YOUR_NCP_CLIENT_ID' || clientId === 'u5mtazxcnw') {
+          showMapError('네이버 지도 Client ID가 설정되지 않았습니다.');
+          return;
+        }
+
+        // 2. 네이버 지도 SDK 스크립트 생성 및 로드
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        // geocoder 서브모듈 필수
+        script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}&submodules=geocoder`;
+        
+        script.onload = () => {
+          console.log('✅ 네이버 지도 SDK 로드 완료');
+          const checkMaps = setInterval(() => {
+            if (typeof naver !== 'undefined' && naver.maps) {
+              clearInterval(checkMaps);
+              App.init();
+            }
+          }, 50);
+        };
+
+        script.onerror = () => {
+          showMapError('지도 SDK 로드 중 오류가 발생했습니다.');
+        };
+
+        document.head.appendChild(script);
+
+      } catch (err) {
+        console.error('App 초기화 오류:', err);
+        showMapError('서버 연결 실패 또는 설정 오류가 발생했습니다.');
       }
-    });
+    }
+
+    function showMapError(msg) {
+      document.getElementById('map').innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #f5f6fa; color: #1a1d2e; font-family: 'Inter', sans-serif; text-align: center; padding: 40px;">
+          <div>
+            <div style="font-size: 48px; margin-bottom: 16px;">🗺️</div>
+            <h2 style="margin-bottom: 8px;">지도를 불러올 수 없습니다</h2>
+            <p style="color: #4a4e6a; font-size: 14px;">${msg}<br>
+              <code style="background: #eef0f6; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Vercel Environment Variables -> NAVER_MAP_CLIENT_ID</code>
+            </p>
+          </div>
+        </div>
+      `;
+    }
+
+    document.addEventListener('DOMContentLoaded', initAppWithDynamicConfig);
   </script>
 
 </body>

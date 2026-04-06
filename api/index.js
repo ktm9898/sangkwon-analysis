@@ -177,37 +177,48 @@ app.post('/api/ai-scan', async (req, res) => {
     const mapWidth = 300; // 무료 등급 안정권 사이즈
     const mapHeight = 300;
 
-    // Static Map URL (무료 등급 제한을 고려하여 scale=1 적용)
-    const staticMapUrl = `https://naveropenapi.apigw.ntruss.com/map-static/v2/raster?center=${lng},${lat}&level=${zoom}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=1`;
-    
-    console.log('[AI스캔] 이미지 요청 URL:', staticMapUrl);
-
-
     let imageBase64 = null;
-    try {
-      const currentOrigin = 'https://sangkwon-analysis.vercel.app/';
-      const mapResp = await fetch(staticMapUrl, {
-        headers: {
-          'X-NCP-APIGW-API-KEY-ID': NAVER_MAP_CLIENT_ID,
-          'X-NCP-APIGW-API-KEY': NAVER_MAP_CLIENT_SECRET,
-          'Referer': currentOrigin,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
+    const currentOrigin = 'https://sangkwon-analysis.vercel.app/';
 
-      if (mapResp.ok) {
-        const mapBuffer = await mapResp.buffer();
-        imageBase64 = mapBuffer.toString('base64');
-        console.log(`[AI스캔] Static Map 이미지 획득 (${mapBuffer.length} bytes)`);
-      } else {
-        const errText = await mapResp.text();
+    // NCP는 상품 종류에 따라 두 가지 도메인을 번갈아 써야 할 때가 있습니다. (210 에러 방지용)
+    const endpoints = [
+      'https://naveropenapi.apigw.ntruss.com/map-static/v2/raster',
+      'https://napi.apigw.ntruss.com/map-static/v2/raster'
+    ];
+
+    try {
+      let lastErrorText = '';
+      for (const baseUrl of endpoints) {
+        const fullUrl = `${baseUrl}?center=${lng},${lat}&level=${zoom}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=1`;
+        console.log(`[AI스캔] 시도 중: ${baseUrl}`);
+
+        const mapResp = await fetch(fullUrl, {
+          headers: {
+            'X-NCP-APIGW-API-KEY-ID': NAVER_MAP_CLIENT_ID,
+            'X-NCP-APIGW-API-KEY': NAVER_MAP_CLIENT_SECRET,
+            'Referer': currentOrigin,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+
+        if (mapResp.ok) {
+          const mapBuffer = await mapResp.buffer();
+          imageBase64 = mapBuffer.toString('base64');
+          console.log(`[AI스캔] Static Map 획득 성공 (${baseUrl})`);
+          break; // 성공 시 루프 탈출
+        } else {
+          lastErrorText = await mapResp.text();
+          console.warn(`[AI스캔] ${baseUrl} 실패: ${mapResp.status} ${lastErrorText}`);
+          // 401 혹은 210이면 다음 도메인으로 시도
+        }
+      }
+
+      if (!imageBase64) {
         const checkID = NAVER_MAP_CLIENT_ID ? `${NAVER_MAP_CLIENT_ID.substring(0,3)}...${NAVER_MAP_CLIENT_ID.slice(-3)}` : '비어있음';
         const checkSecret = NAVER_MAP_CLIENT_SECRET ? `${NAVER_MAP_CLIENT_SECRET.substring(0,3)}...${NAVER_MAP_CLIENT_SECRET.slice(-3)}` : '비어있음';
         
-        // NCP 실제 답변 전문을 가장 먼저 보여줍니다.
-        let customError = `NCP 응답 실패 (HTTP ${mapResp.status}). `;
-        customError += `\n[NCP 실제 답변]: ${errText}`;
-        customError += `\n\n[코드상의 현재 설정 대조]\nID: ${checkID}\nSecret: ${checkSecret}\nReferer: ${currentOrigin}\n(※ 위 ID/Secret의 앞뒤가 NCP 콘솔과 다르면 키가 오염된 것입니다.)`;
+        let customError = `NCP 모든 경로 시도 실패. \n최종 답변: ${lastErrorText}`;
+        customError += `\n\n[코드상의 현재 설정 대조]\nID: ${checkID}\nSecret: ${checkSecret}\nReferer: ${currentOrigin}`;
         
         return res.status(502).json({ error: customError });
       }

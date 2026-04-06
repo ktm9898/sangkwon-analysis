@@ -43,20 +43,25 @@ function setCache(key, data) {
   }
 }
 
-// 환경변수에서 키 읽기 (다양한 이름 지원)
+// 환경변수에서 키 읽기 (NCP 콘솔 명칭과 100% 일치시킴)
 const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || '';
 const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || '';
+
+// Naver Maps (NCP) 서비스용 키
 const NAVER_MAP_CLIENT_ID = process.env.NAVER_MAP_CLIENT_ID || process.env.NAVER_CLIENT_ID || '';
 const NAVER_MAP_CLIENT_SECRET = process.env.NAVER_MAP_CLIENT_SECRET || process.env.NAVER_MAP_SECRET || '';
+
 const ORS_API_KEY = process.env.ORS_API_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
-console.log('[Auth] 네이버 검색 ID:', !!NAVER_CLIENT_ID);
-console.log('[Auth] 네이버 지도 ID:', !!NAVER_MAP_CLIENT_ID);
-console.log('[Auth] 네이버 지도 Secret:', !!NAVER_MAP_CLIENT_SECRET);
+console.log('--- [인증 진단 리포트] ---');
+console.log('✅ 검색 API ID:', !!NAVER_CLIENT_ID ? '로드됨' : '미로드');
+console.log('✅ 지도 API ID:', !!NAVER_MAP_CLIENT_ID ? '로드됨' : '미로드');
+console.log('✅ 지도 API Secret:', !!NAVER_MAP_CLIENT_SECRET ? '로드됨' : '미로드');
 if (!NAVER_MAP_CLIENT_SECRET) {
-  console.warn('[Auth] NAVER_MAP_CLIENT_SECRET이 비어있습니다. Vercel 설정을 확인하세요.');
+  console.warn('⚠️ 경고: NAVER_MAP_CLIENT_SECRET이 없습니다. AI 지도를 읽을 수 없습니다.');
 }
+console.log('------------------------');
 
 // 상권별 대표 브랜드 (Gemini가 업종명만 보고 브랜드를 놓치지 않게 가이드)
 const BRAND_CONTEXT = {

@@ -18,7 +18,7 @@ const SearchManager = (() => {
     if (onProgress) onProgress('📡 API 검색 중...');
 
     // --- 1) 네이버 지역검색 API ---
-    const apiResults = await searchByAPI(lat, lng, bt);
+    const apiResults = await searchByAPI(lat, lng, bt, onProgress);
 
     // --- 2) Gemini AI 지도 스캔 ---
     let aiResults = [];
@@ -43,7 +43,7 @@ const SearchManager = (() => {
   /**
    * 네이버 지역검색 API 기반 자동 탐색
    */
-  async function searchByAPI(lat, lng, bt) {
+  async function searchByAPI(lat, lng, bt, onProgress) {
     let regionName = '';
     try {
       regionName = await getRegionName(lat, lng);
@@ -60,11 +60,11 @@ const SearchManager = (() => {
 
     keywordsToSearch.forEach((subKey) => {
       const exactQuery = regionName ? `${regionName} ${subKey}` : subKey;
-      searchPromises.push(executeNaverSearch(exactQuery, allItems));
+      searchPromises.push(executeNaverSearch(exactQuery, allItems, onProgress));
 
       if (regionName && regionName.match(/[0-9]+가$/)) {
         const broadRegion = regionName.replace(/[0-9]+가$/, '');
-        searchPromises.push(executeNaverSearch(`${broadRegion} ${subKey}`, allItems));
+        searchPromises.push(executeNaverSearch(`${broadRegion} ${subKey}`, allItems, onProgress));
       }
     });
 
@@ -185,38 +185,9 @@ const SearchManager = (() => {
   // 내부 헬퍼 함수들
   // ============================================================
 
-  SearchManager.executeNaverSearch = async function(lat, lng, radius, keyword) {
-    const allResults = [];
-    // 검색어 다변화 (20개 벽을 넘기 위해 자동으로 유의어 검색 시도)
+  async function executeNaverSearch(keyword, allItems, onProgress) {
     const queries = [keyword, `근처 ${keyword}`, `주변 ${keyword}`];
-    
-    if (this.onProgress) this.onProgress(`🔍 네이버 API로 ${keyword} 정밀 탐색 중...`);
-
-    for (const q of queries) {
-      for (let p = 1; p <= 3; p++) { // 각 키워드당 3페이지씩 (최종 약 100~150개 후보)
-        const url = `${CONFIG.PROXY_URL}/api/naver-search?query=${encodeURIComponent(q)}&display=10&start=${(p-1)*10 + 1}&lat=${lat}&lng=${lng}&radius=${radius}&sort=sim&_cb=${Date.now()}_${p}_${q.length}`;
-        
-        try {
-          const resp = await fetch(url);
-          if (!resp.ok) break;
-          const data = await resp.json();
-          
-          if (data.items && data.items.length > 0) {
-            allResults.push(...data.items);
-            if (this.onProgress) this.onProgress(`🔍 탐색 중... (${allResults.length}개 발견)`);
-          } else {
-            break;
-          }
-        } catch (e) {
-          break;
-        }
-      }
-    }
-  }
-
-  async function executeNaverSearch(keyword, allItems) {
-    const queries = [keyword, `근처 ${keyword}`, `주변 ${keyword}`];
-    if (SearchManager.onProgress) SearchManager.onProgress(`🔍 네이버 API 정밀 수색 중...`);
+    if (onProgress) onProgress(`🔍 네이버 API 정밀 수색 중...`);
 
     for (const q of queries) {
       const DISPLAY = 5; // 네이버 표준 규격 (최대 5)
@@ -232,7 +203,7 @@ const SearchManager = (() => {
           const data = await response.json();
           if (data.items && data.items.length > 0) {
             allItems.push(...data.items);
-            if (SearchManager.onProgress) SearchManager.onProgress(`🔍 탐색 중... (${allItems.length}개 발견)`);
+            if (onProgress) onProgress(`🔍 탐색 중... (${allItems.length}개 발견)`);
             if (data.items.length < DISPLAY) break; 
           } else {
             break;

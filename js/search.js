@@ -34,8 +34,12 @@ const SearchManager = (() => {
     const merged = mergeAndDeduplicate(apiResults, aiResults, lat, lng);
     merged.regionName = apiResults.regionName || '';
 
-    console.log(`[검색] 최종 경쟁업체: ${merged.length}개 (API:${apiResults.length}, AI:${aiResults.length})`);
-    if (onProgress) onProgress(`✅ 총 ${merged.length}개의 경쟁업체를 찾았습니다.`);
+    const rawTotal = apiResults.length + aiResults.length;
+    console.log(`[검색] 최종 경쟁업체: ${merged.length}개 (AI포함 수집: ${rawTotal}, 중복제거/반경필터 후: ${merged.length})`);
+    
+    if (onProgress) {
+      onProgress(`✅ ${rawTotal}건의 후보지 중 중복/오차 제거 후 최적의 **${merged.length}개**를 찾았습니다.`);
+    }
 
     return merged;
   }

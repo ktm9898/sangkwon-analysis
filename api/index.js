@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // ================================================================
-// In-memory 캐시 (Serverless 환경 특성상 인스턴스별 한시 유지됨)
+// API Endpoint: /api/config (네이버 지도 SDK 설정용)
 // ================================================================
 const cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30분
@@ -43,13 +43,20 @@ function setCache(key, data) {
   }
 }
 
-// 환경변수에서 키 읽기
+// 환경변수에서 키 읽기 (다양한 이름 지원)
 const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || '';
 const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || '';
+const NAVER_MAP_CLIENT_ID = process.env.NAVER_MAP_CLIENT_ID || process.env.NAVER_CLIENT_ID || '';
+const NAVER_MAP_CLIENT_SECRET = process.env.NAVER_MAP_CLIENT_SECRET || process.env.NAVER_MAP_SECRET || '';
 const ORS_API_KEY = process.env.ORS_API_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const NAVER_MAP_CLIENT_ID = process.env.NAVER_MAP_CLIENT_ID;
-const NAVER_MAP_SECRET = process.env.NAVER_MAP_SECRET;
+
+console.log('[Auth] 네이버 검색 ID:', !!NAVER_CLIENT_ID);
+console.log('[Auth] 네이버 지도 ID:', !!NAVER_MAP_CLIENT_ID);
+console.log('[Auth] 네이버 지도 Secret:', !!NAVER_MAP_CLIENT_SECRET);
+if (!NAVER_MAP_CLIENT_SECRET) {
+  console.warn('[Auth] NAVER_MAP_CLIENT_SECRET이 비어있습니다. Vercel 설정을 확인하세요.');
+}
 
 // 상권별 대표 브랜드 (Gemini가 업종명만 보고 브랜드를 놓치지 않게 가이드)
 const BRAND_CONTEXT = {
@@ -174,7 +181,7 @@ app.post('/api/ai-scan', async (req, res) => {
       const mapResp = await fetch(staticMapUrl, {
         headers: {
           'X-NCP-APIGW-API-KEY-ID': NAVER_MAP_CLIENT_ID,
-          'X-NCP-APIGW-API-KEY': process.env.NAVER_MAP_SECRET || ''
+          'X-NCP-APIGW-API-KEY': NAVER_MAP_CLIENT_SECRET
         }
       });
 

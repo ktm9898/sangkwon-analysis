@@ -43,16 +43,17 @@ function setCache(key, data) {
   }
 }
 
-// 환경변수에서 키 읽기 (NCP 콘솔 명칭과 100% 일치시킴)
-const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || '';
-const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || '';
+// 환경변수에서 키 읽기 (공백 제거 로직 추가)
+const NAVER_CLIENT_ID = (process.env.NAVER_CLIENT_ID || '').trim();
+const NAVER_CLIENT_SECRET = (process.env.NAVER_CLIENT_SECRET || '').trim();
 
 // Naver Maps (NCP) 서비스용 키
-const NAVER_MAP_CLIENT_ID = process.env.NAVER_MAP_CLIENT_ID || process.env.NAVER_CLIENT_ID || '';
-const NAVER_MAP_CLIENT_SECRET = process.env.NAVER_MAP_CLIENT_SECRET || process.env.NAVER_MAP_SECRET || '';
+const NAVER_MAP_CLIENT_ID = (process.env.NAVER_MAP_CLIENT_ID || process.env.NAVER_CLIENT_ID || '').trim();
+const NAVER_MAP_CLIENT_SECRET = (process.env.NAVER_MAP_CLIENT_SECRET || process.env.NAVER_MAP_SECRET || '').trim();
 
-const ORS_API_KEY = process.env.ORS_API_KEY || '';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const ORS_API_KEY = (process.env.ORS_API_KEY || '').trim();
+const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
+
 
 console.log('--- [인증 진단 리포트] ---');
 console.log('✅ 검색 API ID:', !!NAVER_CLIENT_ID ? '로드됨' : '미로드');
@@ -183,13 +184,13 @@ app.post('/api/ai-scan', async (req, res) => {
 
     let imageBase64 = null;
     try {
-      const currentOrigin = 'https://sangkwon-analysis.vercel.app';
+      const currentOrigin = 'https://sangkwon-analysis.vercel.app/';
       const mapResp = await fetch(staticMapUrl, {
         headers: {
           'X-NCP-APIGW-API-KEY-ID': NAVER_MAP_CLIENT_ID,
           'X-NCP-APIGW-API-KEY': NAVER_MAP_CLIENT_SECRET,
           'Referer': currentOrigin,
-          'User-Agent': 'Mozilla/5.0 (Vercel Node.js Serverless)'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
       });
 
@@ -202,12 +203,10 @@ app.post('/api/ai-scan', async (req, res) => {
         const checkID = NAVER_MAP_CLIENT_ID ? `${NAVER_MAP_CLIENT_ID.substring(0,3)}...${NAVER_MAP_CLIENT_ID.slice(-3)}` : '비어있음';
         const checkSecret = NAVER_MAP_CLIENT_SECRET ? `${NAVER_MAP_CLIENT_SECRET.substring(0,3)}...${NAVER_MAP_CLIENT_SECRET.slice(-3)}` : '비어있음';
         
-        let customError = `NCP 인증 거절 (HTTP ${mapResp.status}). `;
-        if (mapResp.status === 401) {
-          customError += `\n\n--- [진단 가이드] ---\n1. NCP 콘솔의 키와 대조하세요:\n   ID: ${checkID}\n   Secret: ${checkSecret}\n2. NCP 콘솔 [Web 설정]에 등록된 도메인이\n   "${currentOrigin}" 인지 확인하세요!`;
-        } else if (errText.includes('NotAllowedLocation')) {
-          customError += `도메인("${currentOrigin}")이 등록되지 않았습니다.`;
-        }
+        // NCP 실제 답변 전문을 가장 먼저 보여줍니다.
+        let customError = `NCP 응답 실패 (HTTP ${mapResp.status}). `;
+        customError += `\n[NCP 실제 답변]: ${errText}`;
+        customError += `\n\n[코드상의 현재 설정 대조]\nID: ${checkID}\nSecret: ${checkSecret}\nReferer: ${currentOrigin}\n(※ 위 ID/Secret의 앞뒤가 NCP 콘솔과 다르면 키가 오염된 것입니다.)`;
         
         return res.status(502).json({ error: customError });
       }

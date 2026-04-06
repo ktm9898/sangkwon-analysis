@@ -60,20 +60,19 @@ const SearchManager = (() => {
       : [bt.keyword];
 
     const allItems = [];
-    const searchPromises = [];
     
-    // 속도를 위해 다시 병렬 검색으로 전환
+    // 속도와 429 방어를 동시에 잡기 위해 50ms 짧은 대기시간을 둔 순차 검색 수행
     for (const subKey of keywordsToSearch) {
       const exactQuery = regionName ? `${regionName} ${subKey}` : subKey;
-      searchPromises.push(executeNaverSearch(exactQuery, allItems, onProgress));
+      await executeNaverSearch(exactQuery, allItems, onProgress);
+      await wait(50); // 아주 짧은 지연 (네이버 차단 방지)
 
       if (regionName && regionName.match(/[0-9]+가$/)) {
         const broadRegion = regionName.replace(/[0-9]+가$/, '');
-        searchPromises.push(executeNaverSearch(`${broadRegion} ${subKey}`, allItems, onProgress));
+        await executeNaverSearch(`${broadRegion} ${subKey}`, allItems, onProgress);
+        await wait(50);
       }
     }
-    
-    await Promise.all(searchPromises);
 
     const competitors = allItems
       .map(item => convertNaverItem(item))

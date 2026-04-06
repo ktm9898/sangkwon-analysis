@@ -173,14 +173,15 @@ app.post('/api/ai-scan', async (req, res) => {
       return res.json(cached);
     }
 
-    // Step 1: 네이버 Static Map API로 지도 이미지 요청 (복수 줌 레벨)
-    const mapWidth = 640;
-    const mapHeight = 640;
+    // Step 1: 네이버 Static Map API로 지도 이미지 요청
+    const mapWidth = 300; // 무료 등급 안정권 사이즈
+    const mapHeight = 300;
 
-    // Static Map URL (네이버 지도 Static API) - 마커를 제거하여 순수 글자 가독성 극대화 (scale=2)
-    const staticMapUrl = `https://naveropenapi.apigw.ntruss.com/map-static/v2/raster?center=${lng},${lat}&level=${zoom}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=2`;
+    // Static Map URL (무료 등급 제한을 고려하여 scale=1 적용)
+    const staticMapUrl = `https://naveropenapi.apigw.ntruss.com/map-static/v2/raster?center=${lng},${lat}&level=${zoom}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=1`;
     
     console.log('[AI스캔] 이미지 요청 URL:', staticMapUrl);
+
 
     let imageBase64 = null;
     try {

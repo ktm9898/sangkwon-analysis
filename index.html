@@ -247,10 +247,11 @@
         // 2. 네이버 지도 SDK 스크립트 생성 및 로드
         const script = document.createElement('script');
         script.type = 'text/javascript';
-        script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}&submodules=geocoder`;
+        // 사용자께서 이전에 성공했던 ncpKeyId 방식으로 원상복구
+        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
         
         script.onload = () => {
-          console.log('✅ 지도 SDK 로드 완료');
+          console.log('✅ 지도 SDK 로드 완료 (oapi 방식)');
           const checkMaps = setInterval(() => {
             if (typeof naver !== 'undefined' && naver.maps) {
               clearInterval(checkMaps);

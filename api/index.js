@@ -164,7 +164,7 @@ app.post('/api/ai-scan', async (req, res) => {
     const mapWidth = 640;
     const mapHeight = 640;
 
-    // Static Map URL (네이버 지도 Static API) - 글자 크기를 사용자 화면 수준으로 확보하기 위해 zoom 그대로 사용
+    // Static Map URL (네이버 지도 Static API) - 마커를 제거하여 순수 글자 가독성 극대화 (scale=2)
     const staticMapUrl = `https://naveropenapi.apigw.ntruss.com/map-static/v2/raster?center=${lng},${lat}&level=${zoom}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=2`;
     
     console.log('[AI스캔] 이미지 요청 URL:', staticMapUrl);

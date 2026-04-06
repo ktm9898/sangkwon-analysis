@@ -185,28 +185,62 @@ const SearchManager = (() => {
   // 내부 헬퍼 함수들
   // ============================================================
 
-  async function executeNaverSearch(query, allItems) {
-    const PAGES = 15; // 키워드당 15페이지 수집 (15 * 10 = 150개)
-    const DISPLAY = 10; // 네이버 로컬 API 한도
+  SearchManager.executeNaverSearch = async function(lat, lng, radius, keyword) {
+    const allResults = [];
+    // 검색어 다변화 (20개 벽을 넘기 위해 자동으로 유의어 검색 시도)
+    const queries = [keyword, `근처 ${keyword}`, `주변 ${keyword}`];
+    
+    if (this.onProgress) this.onProgress(`🔍 네이버 API로 ${keyword} 정밀 탐색 중...`);
 
-    for (let i = 0; i < PAGES; i++) {
-      const start = (i * DISPLAY) + 1;
-      const cacheBuster = `&_cb=${Date.now()}`;
-      try {
-        const response = await fetch(
-          `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(query)}&display=${DISPLAY}&start=${start}${cacheBuster}`
-        );
-        if (!response.ok) break;
-        const data = await response.json();
-        if (data.items && data.items.length > 0) {
-          allItems.push(...data.items);
-          if (data.items.length < DISPLAY) break; // 결과가 10개 미만이면 다음 페이지 없음
-        } else {
+    for (const q of queries) {
+      for (let p = 1; p <= 3; p++) { // 각 키워드당 3페이지씩 (최종 약 100~150개 후보)
+        const url = `${CONFIG.PROXY_URL}/api/naver-search?query=${encodeURIComponent(q)}&display=10&start=${(p-1)*10 + 1}&lat=${lat}&lng=${lng}&radius=${radius}&sort=sim&_cb=${Date.now()}_${p}_${q.length}`;
+        
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) break;
+          const data = await resp.json();
+          
+          if (data.items && data.items.length > 0) {
+            allResults.push(...data.items);
+            if (this.onProgress) this.onProgress(`🔍 탐색 중... (${allResults.length}개 발견)`);
+          } else {
+            break;
+          }
+        } catch (e) {
           break;
         }
-      } catch (e) {
-        console.warn(`[검색] "${query}" 페이징(${start}) 권한 오류 또는 네트워크 실패:`, e.message);
-        break;
+      }
+    }
+  }
+
+  async function executeNaverSearch(keyword, allItems) {
+    const queries = [keyword, `근처 ${keyword}`, `주변 ${keyword}`];
+    if (SearchManager.onProgress) SearchManager.onProgress(`🔍 네이버 API 정밀 수색 중...`);
+
+    for (const q of queries) {
+      const DISPLAY = 5; // 네이버 표준 규격 (최대 5)
+      const PAGES = 15;  // 규격 내에서 페이지를 늘려 많이 수집
+      
+      for (let i = 0; i < PAGES; i++) {
+        const start = (i * DISPLAY) + 1;
+        const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(q)}&display=${DISPLAY}&start=${start}&sort=sim&_cb=${Date.now()}`;
+        
+        try {
+          const response = await fetch(url);
+          if (!response.ok) break;
+          const data = await response.json();
+          if (data.items && data.items.length > 0) {
+            allItems.push(...data.items);
+            if (SearchManager.onProgress) SearchManager.onProgress(`🔍 탐색 중... (${allItems.length}개 발견)`);
+            if (data.items.length < DISPLAY) break; 
+          } else {
+            break;
+          }
+        } catch (e) {
+          console.error('[Naver API] 오류:', e);
+          break;
+        }
       }
     }
   }

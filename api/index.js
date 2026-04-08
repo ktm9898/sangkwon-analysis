@@ -170,7 +170,7 @@ function worldToLatLng(x, y) {
 function getLatLngFromPixel(centerLat, centerLng, zoom, px, py, size = 1024) {
   const worldCenter = latLngToWorld(centerLat, centerLng);
   // 네이버/구글 맵의 줌 레벨에 따른 월드맵 전체 픽셀 크기
-  const worldPixelSize = Math.pow(2, zoom) * 256;
+  const worldPixelSize = Math.pow(2, zoom) * 512;
   
   // 이미지 중심에서부터의 픽셀 거리 (0.5 단위로 정밀하게)
   const dx = (px - size / 2) / worldPixelSize;

@@ -19,7 +19,7 @@ const CONFIG = {
   BUSINESS_TYPES: {
     convenience: {
       label: '편의점',
-      icon: '🏪',
+      icon: '',
       keyword: '편의점',
       subKeywords: ['GS25', 'CU', '세븐일레븐', '이마트24', '미니스톱', '편의점'],
       isochrone: { primary: 180, secondary: 420, tertiary: 720 },   // 초 단위
@@ -28,7 +28,7 @@ const CONFIG = {
     },
     hair_salon: {
       label: '미용실',
-      icon: '💇',
+      icon: '',
       keyword: '미용실',
       subKeywords: ['미용실', '헤어샵', '헤어', '바버샵', '미장원'],
       isochrone: { primary: 300, secondary: 600, tertiary: 1200 },
@@ -37,7 +37,7 @@ const CONFIG = {
     },
     laundry: {
       label: '세탁소',
-      icon: '👔',
+      icon: '',
       keyword: '세탁소',
       subKeywords: ['세탁소', '세탁', '크린토피아', '코인워시', '빨래방'],
       isochrone: { primary: 300, secondary: 600, tertiary: 900 },
@@ -46,7 +46,7 @@ const CONFIG = {
     },
     restaurant: {
       label: '음식점',
-      icon: '🍽️',
+      icon: '',
       keyword: '음식점',
       subKeywords: ['식당', '음식점', '맛집', '한식', '중식', '일식', '양식'],
       isochrone: { primary: 420, secondary: 900, tertiary: 1800 },
@@ -55,7 +55,7 @@ const CONFIG = {
     },
     cafe: {
       label: '카페',
-      icon: '☕',
+      icon: '',
       keyword: '카페',
       subKeywords: ['카페', '스타벅스', '이디야', '메가커피', '투썸', '파스쿠찌', '컴포즈'],
       isochrone: { primary: 300, secondary: 720, tertiary: 1800 },
@@ -64,7 +64,7 @@ const CONFIG = {
     },
     academy: {
       label: '학원',
-      icon: '📚',
+      icon: '',
       keyword: '학원',
       subKeywords: ['학원', '보습학원', '영어학원', '수학학원', '피아노학원', '태권도'],
       isochrone: { primary: 600, secondary: 1200, tertiary: 2700 },

@@ -12,7 +12,7 @@ const MapManager = (() => {
 
   // 외부에서 등록할 콜백
   let onBasePositionChange = null;
-  let mapClickEnabled = true;
+  let mapClickEnabled = false; // 기본적으로 잠금 (실수 방지)
 
   /**
    * 지도 초기화
@@ -68,22 +68,31 @@ const MapManager = (() => {
       baseMarker = new naver.maps.Marker({
         position: latlng,
         map: map,
+        draggable: true, // 사용자가 직접 마커를 잡고 옮길 수 있게 함
         icon: {
           content: `
             <div style="
-              width: 40px; height: 40px;
-              background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-              border: 3px solid #fff;
+              width: 38px; height: 38px;
+              background: #4f46e5;
+              border: 4px solid #fff;
               border-radius: 50%;
-              box-shadow: 0 2px 12px rgba(108,92,231,0.5);
+              box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
               display: flex; align-items: center; justify-content: center;
-              color: #fff; font-size: 18px;
-            ">📍</div>
+              color: #fff; font-size: 14px; font-weight: 800;
+            ">P</div>
           `,
-          size: new naver.maps.Size(40, 40),
-          anchor: new naver.maps.Point(20, 20)
+          size: new naver.maps.Size(38, 38),
+          anchor: new naver.maps.Point(19, 19)
         },
         zIndex: 100
+      });
+
+      // 드래그 종료 이벤트 핸들러 추가
+      naver.maps.Event.addListener(baseMarker, 'dragend', (e) => {
+        const newPos = e.coord;
+        if (onBasePositionChange) {
+          onBasePositionChange(newPos.lat(), newPos.lng());
+        }
       });
     }
 
@@ -170,8 +179,8 @@ const MapManager = (() => {
               border-radius: 50%;
               box-shadow: 0 2px 8px rgba(0,0,0,0.3);
               display: flex; align-items: center; justify-content: center;
-              font-size: 14px; cursor: pointer;
-            ">${config.icon}</div>
+              font-size: 13px; cursor: pointer; color: #fff; font-weight: 700;
+            ">${config.icon || (businessType === 'cafe' ? 'B' : 'C')}</div>
           `,
           size: new naver.maps.Size(28, 28),
           anchor: new naver.maps.Point(14, 14)

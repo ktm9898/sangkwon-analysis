@@ -219,15 +219,15 @@ const UiManager = (() => {
     const toggle = document.getElementById('map-click-toggle');
     if (!toggle) return;
 
-    // 기본: 활성화
-    toggle.classList.add('active');
-    MapManager.setMapClickEnabled(true);
+    // 기본: 비활성화 (사용자가 명시적으로 켤 때만 이동 가능하게 하여 실수 방지)
+    toggle.classList.remove('active');
+    MapManager.setMapClickEnabled(false);
 
     toggle.addEventListener('click', () => {
       toggle.classList.toggle('active');
       const enabled = toggle.classList.contains('active');
       MapManager.setMapClickEnabled(enabled);
-      showToast(enabled ? '🗺️ 지도 클릭 선택 활성화' : '🚫 지도 클릭 선택 비활성화');
+      showToast(enabled ? '📍 지도 클릭 위치 선택 활성화' : '🔒 지도 클릭 위치 선택 잠금');
     });
   }
 
@@ -645,6 +645,11 @@ const UiManager = (() => {
 
       // 현재 등시선 오버라이드 반영
       const isoConfig = getIsochroneConfig();
+      
+      // 사이드바 패널 노출
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar) sidebar.classList.add('show');
+      
       onAnalyzeCallback(selectedBusinessType, pos, competitors, isoConfig);
     });
   }
@@ -684,13 +689,10 @@ const UiManager = (() => {
 
     body.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">🗺️</div>
-        <h3>분석 결과가 여기에 표시됩니다</h3>
+        <h3>상권 분석 준비 완료</h3>
         <p>
-          1. 업종을 선택하세요<br>
-          2. 기준점 탭에서 위치를 설정하세요<br>
-          3. 경쟁점포 탭에서 탐색 후<br>
-          4. 분석 시작을 눌러주세요
+          주변 수색을 마친 뒤,<br>
+          아래의 <strong>'분석 보고서 생성'</strong> 버튼을 클릭하세요.
         </p>
       </div>
     `;
@@ -709,21 +711,21 @@ const UiManager = (() => {
     const manualCount = allCompetitors.filter(c => c.source === 'manual').length;
 
     body.innerHTML = `
-      <div class="section-title">분석 결과</div>
+      <div class="section-title">최종 분석 보고서</div>
 
       <!-- 지도 범례 -->
-      <div class="result-card" style="background:#f0f4f8; border:1px solid #d9e2ec; margin-bottom: 20px;">
+      <div class="result-card" style="background:var(--bg-tertiary); border:1px solid var(--glass-border); margin-bottom: 20px;">
         <div class="card-header">
-          <span class="card-title">📖 지도 범례</span>
+          <span class="card-title">도표 안내</span>
         </div>
-        <div style="font-size: 12px; color: #4a4e6a; line-height: 1.7; margin-top: 8px;">
-          <div>
-            <span style="display:inline-block; width:12px; height:12px; background:rgba(255,107,107,0.2); border:2px solid ${bt.color.primary}; vertical-align:middle; margin-right:4px;"></span>
-            <strong>다각형:</strong> 도보 <strong>${Math.round((data.isoConfig?.primary || bt.isochrone.primary) / 60)}분</strong> 내 핵심 상권
+        <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-top: 8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="display:inline-block; width:10px; height:10px; background:rgba(79,70,229,0.15); border:1px solid var(--accent);"></span>
+            <span>도보 <strong>${Math.round((data.isoConfig?.primary || bt.isochrone.primary) / 60)}분</strong> 핵심 상권</span>
           </div>
-          <div style="margin-top:4px;">
-            <span style="display:inline-block; width:12px; height:12px; background:rgba(160,163,184,0.2); border:1px dashed #a0a3b8; border-radius:50%; vertical-align:middle; margin-right:4px;"></span>
-            <strong>원형:</strong> 경쟁업체 상권력 (반경 ${currentRadius}m)
+          <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+            <span style="display:inline-block; width:10px; height:10px; border:1px dashed var(--text-muted); border-radius:50%;"></span>
+            <span>타 업체 유효 반경 (${currentRadius}m)</span>
           </div>
         </div>
       </div>
@@ -731,27 +733,27 @@ const UiManager = (() => {
       <!-- 업종 정보 -->
       <div class="result-card">
         <div class="card-header">
-          <span class="card-title">${bt.icon} 선택 업종</span>
+          <span class="card-title">선택 업종 지표</span>
         </div>
-        <div class="card-value" style="color: var(--accent-light)">${bt.label}</div>
+        <div class="card-value" style="color: var(--accent); font-size: 20px;">${bt.label}</div>
         <div class="card-desc">
-          기준점: ${data.center.lat.toFixed(4)}, ${data.center.lng.toFixed(4)}
+          중심 좌표: ${data.center.lat.toFixed(4)}, ${data.center.lng.toFixed(4)}
         </div>
       </div>
 
       <!-- 경쟁업체 현황 -->
       <div class="result-card">
         <div class="card-header">
-          <span class="card-title">🏬 경쟁업체 현황</span>
+          <span class="card-title">주변 경쟁 밀도</span>
         </div>
         <div class="card-value ${closeCompetitors > 5 ? 'danger' : closeCompetitors > 2 ? 'warning' : 'success'}">
-          ${closeCompetitors}개
+          ${closeCompetitors} 개소
         </div>
-        <div class="card-desc">반경 ${currentRadius}m 이내 (총 ${allCompetitors.length}개 탐색)</div>
-        <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
-          ${apiCount > 0 ? `<span style="font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(9,132,227,0.1); color:#0984e3; font-weight:600;">API ${apiCount}개</span>` : ''}
-          ${aiCount > 0 ? `<span style="font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(108,92,231,0.1); color:#6c5ce7; font-weight:600;">AI ${aiCount}개</span>` : ''}
-          ${manualCount > 0 ? `<span style="font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(0,184,148,0.1); color:#00b894; font-weight:600;">수동 ${manualCount}개</span>` : ''}
+        <div class="card-desc">직전 수색 반경 ${currentRadius}m 기준</div>
+        <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
+          ${apiCount > 0 ? `<span class="s-badge api">API ${apiCount}</span>` : ''}
+          ${aiCount > 0 ? `<span class="s-badge ai">AI ${aiCount}</span>` : ''}
+          ${manualCount > 0 ? `<span class="s-badge manual">수동 ${manualCount}</span>` : ''}
         </div>
       </div>
     `;

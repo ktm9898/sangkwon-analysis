@@ -18,24 +18,17 @@
       <div class="control-panel" id="control-panel">
         <!-- 패널 헤더 -->
         <div class="panel-header">
-          <div class="panel-title">🏪 나는 사장</div>
-          <button class="panel-toggle" id="panel-toggle" title="패널 접기/펼치기">▲</button>
+          <div class="panel-title">분석 설정</div>
+          <button class="panel-toggle" id="panel-toggle" title="패널 접기/펼치기">
+             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m18 15-6-6-6 6"/></svg>
+          </button>
         </div>
 
         <!-- 탭 네비게이션 -->
         <div class="tab-nav">
-          <button class="tab-nav-item active" id="tab-nav-business" data-tab="business">
-            <span class="tab-nav-icon">🏬</span>
-            <span class="tab-nav-label">업종선택</span>
-          </button>
-          <button class="tab-nav-item" id="tab-nav-location" data-tab="location">
-            <span class="tab-nav-icon">📍</span>
-            <span class="tab-nav-label">기준점</span>
-          </button>
-          <button class="tab-nav-item" id="tab-nav-competitors" data-tab="competitors">
-            <span class="tab-nav-icon">🔍</span>
-            <span class="tab-nav-label">경쟁점포</span>
-          </button>
+          <button class="tab-nav-item active" id="tab-nav-business" data-tab="business">업종</button>
+          <button class="tab-nav-item" id="tab-nav-location" data-tab="location">위치</button>
+          <button class="tab-nav-item" id="tab-nav-competitors" data-tab="competitors">점포</button>
         </div>
 
         <!-- 탭 컨텐츠 영역 -->
@@ -92,24 +85,21 @@
 
             <div class="slider-group" id="isochrone-sliders">
               <div class="slider-row">
-                <input type="checkbox" id="iso-primary-chk" checked disabled style="margin-right: -4px;">
-                <span class="slider-label">1차 상권</span>
-                <input type="range" class="range-slider" id="iso-primary"
-                  min="1" max="15" step="1" value="3">
+                <input type="checkbox" id="iso-primary-chk" checked disabled>
+                <span class="slider-label">1차 (핵심)</span>
+                <input type="range" class="range-slider" id="iso-primary" min="1" max="15" step="1" value="3">
                 <span class="slider-value" id="iso-primary-val">3분</span>
               </div>
               <div class="slider-row">
-                <input type="checkbox" id="iso-secondary-chk" checked style="margin-right: -4px; cursor: pointer;">
-                <span class="slider-label">2차 상권</span>
-                <input type="range" class="range-slider" id="iso-secondary"
-                  min="3" max="30" step="1" value="7">
+                <input type="checkbox" id="iso-secondary-chk" checked>
+                <span class="slider-label">2차 (배후)</span>
+                <input type="range" class="range-slider" id="iso-secondary" min="3" max="30" step="1" value="7">
                 <span class="slider-value" id="iso-secondary-val">7분</span>
               </div>
               <div class="slider-row">
-                <input type="checkbox" id="iso-tertiary-chk" checked style="margin-right: -4px; cursor: pointer;">
-                <span class="slider-label">3차 상권</span>
-                <input type="range" class="range-slider" id="iso-tertiary"
-                  min="5" max="60" step="5" value="12">
+                <input type="checkbox" id="iso-tertiary-chk" checked>
+                <span class="slider-label">3차 (광역)</span>
+                <input type="range" class="range-slider" id="iso-tertiary" min="5" max="60" step="5" value="12">
                 <span class="slider-value" id="iso-tertiary-val">12분</span>
               </div>
             </div>
@@ -121,7 +111,10 @@
             <div class="competitor-auto-section">
               <button class="scan-btn" id="scan-btn" disabled>
                 <span class="scan-spinner" id="scan-spinner"></span>
-                <span>🤖 AI + API 자동 탐색</span>
+                <span class="btn-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4m4 8V8"/></svg>
+                </span>
+                <span>AI 지역 수색 개시</span>
               </button>
               <div class="scan-status" id="scan-status"></div>
             </div>
@@ -158,8 +151,7 @@
             </div>
             <div class="competitor-list" id="competitor-list">
               <div class="competitor-empty">
-                <span>🏬</span>
-                <p>아직 탐색된 점포가 없습니다.<br>자동 탐색 또는 수동 검색으로 추가하세요.</p>
+                <p>수색된 점포가 없습니다.<br>자동 탐색 또는 검색으로 추가하세요.</p>
               </div>
             </div>
 
@@ -176,17 +168,17 @@
         <div class="panel-footer">
           <button class="analyze-btn" id="analyze-btn" disabled>
             <span class="spinner"></span>
-            <span class="btn-text">🔍 상권 분석 시작</span>
+            <span class="btn-text">상권 분석 보고서 생성</span>
           </button>
         </div>
       </div><!-- /control-panel -->
     </div>
 
-    <!-- ===== Sidebar ===== -->
-    <div class="sidebar">
+    <!-- ===== Sidebar (Initially Hidden) ===== -->
+    <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <h1>📊 상권분석</h1>
-        <p>최적 창업 입지를 찾아드립니다</p>
+        <h1>입지 분석 보고서</h1>
+        <p>선택하신 지역의 시장 지표입니다</p>
       </div>
       <div class="sidebar-body" id="sidebar-body">
         <!-- UiManager가 동적으로 렌더링 -->

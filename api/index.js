@@ -278,35 +278,20 @@ app.post('/api/ai-scan', async (req, res) => {
 
     // Step 2: Gemini Vision API로 점포명 추출
     const brands = BRAND_CONTEXT[keyword] || '';
-    const prompt = `[보이는 대로 모두 추출하세요!]
-지도 이미지에서 "${keyword}"(관련 브랜드: ${brands})와 관련된 모든 매장의 이름을 읽고 좌표(x, y)를 찍으세요.
-
-**절대 규칙:**
-1. **의심스러워도 찍으세요**: "${keyword}" 업종일 확률이 1%라도 있다면 무조건 발견 리스트에 포함하세요. 하나라도 놓치면 실패입니다.
-2. **이름/아이콘 모두 수색**: 글자가 작거나 아이콘만 보여도 무조건 찾아서 좌표를 찍으세요.
-3. **오로지 JSON만**: 인삿말 없이 오직 아래 형식의 JSON 배열만 출력하세요.
-   [{"name": "매장명", "x": 가로숫자, "y": 세로숫자}, ...]
-
-이미지 구석구석을 샅샅이 뒤져서 최대한 많은 마커를 뱉어내세요!`;
+    const prompt = `지도에서 "${keyword}"(브랜드: ${brands}) 매장을 찾아 JSON으로만 출력하세요. 
+형식: [{"name":"이름","x":숫자,"y":숫자},...]
+최대한 많이 찾되, 설명 없이 결과만 출력하세요.`;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
 
     const geminiPayload = {
       contents: [{
         role: "user",
-        parts: [
-          { text: prompt },
-          {
-            inline_data: {
-              mime_type: 'image/jpeg',
-              data: imageBase64
-            }
-          }
-        ]
+        parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } }]
       }],
       generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048
+        temperature: 0.1,
+        maxOutputTokens: 4096 // 출력 한도 확대
       }
     };
 
@@ -325,34 +310,46 @@ app.post('/api/ai-scan', async (req, res) => {
     const geminiData = await geminiResp.json();
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
 
-    // JSON 파싱 및 실제 지리 좌표 변환
+    // 정밀 파싱 (내용이 잘려도 정규식으로 유효한 객체만 추출)
     let foundStores = [];
     try {
-      const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const rawStores = JSON.parse(cleanJson);
+      const storeRegex = /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"x"\s*:\s*(\d+)\s*,\s*"y"\s*:\s*(\d+)\s*\}/g;
+      let match;
+      while ((match = storeRegex.exec(rawText)) !== null) {
+        const name = match[1];
+        const x = parseInt(match[2]);
+        const y = parseInt(match[3]);
+        
+        // 픽셀 좌표 변환 및 지리적 좌표 생성
+        const px = (x / 1000) * 1024;
+        const py = (y / 1000) * 1024;
+        const geo = getLatLngFromPixel(lat, lng, zoom, px, py, 1024);
+        
+        foundStores.push({
+          name,
+          lat: geo.lat,
+          lng: geo.lng,
+          pixelX: x,
+          pixelY: y
+        });
+      }
       
-      if (Array.isArray(rawStores)) {
-        foundStores = rawStores.map(s => {
-          if (!s.name || s.x === undefined || s.y === undefined) return null;
-          
-          // Gemini의 0~1000 좌표를 1024px 이미지 좌표로 변환
-          const px = (s.x / 1000) * 1024;
-          const py = (s.y / 1000) * 1024;
-          
-          // 픽셀 좌표 → 위경도 변환
-          const geo = getLatLngFromPixel(lat, lng, zoom, px, py, 1024);
-          
-          return {
-            name: s.name,
-            lat: geo.lat,
-            lng: geo.lng,
-            pixelX: s.x,
-            pixelY: s.y
-          };
-        }).filter(s => s !== null);
+      // 혹시 정규식으로 안 되면 기존 JSON.parse 시도 (백업)
+      if (foundStores.length === 0) {
+        const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const rawStores = JSON.parse(cleanJson);
+        if (Array.isArray(rawStores)) {
+          foundStores = rawStores.map(s => {
+            if (!s.name || s.x === undefined || s.y === undefined) return null;
+            const px = (s.x / 1000) * 1024;
+            const py = (s.y / 1000) * 1024;
+            const geo = getLatLngFromPixel(lat, lng, zoom, px, py, 1024);
+            return { name: s.name, lat: geo.lat, lng: geo.lng, pixelX: s.x, pixelY: s.y };
+          }).filter(s => s !== null);
+        }
       }
     } catch (e) {
-      console.warn('[AI스캔] JSON 파싱 혹은 좌표 변환 실패:', rawText);
+      console.warn('[AI스캔] 파싱 오류 (일부 추출 시도):', e.message);
     }
 
     console.log(`[AI스캔] 분석 완료: ${foundStores.length}개 점포 위치 특정`);

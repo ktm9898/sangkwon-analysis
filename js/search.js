@@ -137,7 +137,7 @@ const SearchManager = (() => {
     await Promise.all(aiStores.map(async (store) => {
       const name = store.name;
       try {
-        // 1순위: AI가 찾은 이름으로 네이버 검색 시도 (전화번호, 상세주소 등 확보)
+        // 1순위: AI가 찾은 이름으로 네이버 지역검색 시도
         const regionContext = regionName || '';
         const searchQuery = `${regionContext} ${name}`.trim();
         const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(searchQuery)}&display=5&start=1&_cb=${Date.now()}`;
@@ -147,38 +147,41 @@ const SearchManager = (() => {
         if (resp.ok) {
           const d = await resp.json();
           if (d.items && d.items.length > 0) {
-            // 검색 결과 중 AI가 찍은 좌표와 가장 가까운 것 선택 (오차 보정)
             let minOffset = Infinity;
             for (const item of d.items) {
               const converted = convertNaverItem(item);
               if (!converted) continue;
               const offset = getDistance(store.lat, store.lng, converted.lat, converted.lng);
-              // AI가 본 위치와 API 검색 결과가 100m 이내라면 동일 업체로 간주하고 정확한 좌표(API) 활용
+              // 100m 이내 매칭 성공 시 보정 데이터로 활용
               if (offset < 100 && offset < minOffset) {
                 minOffset = offset;
                 bestMatch = converted;
-                // AI가 직접 눈으로 본 위치라는 정보 보존
-                bestMatch.aiPixel = { x: store.pixelX, y: store.pixelY };
               }
             }
           }
         }
 
         if (bestMatch) {
-          // 검색 성공: 메타데이터(전화번호 등)만 가져오고, 위치는 AI가 본 곳을 최대한 존중
+          // [중요] 캘리브레이션을 위해 API 공식 좌표와 AI 시각 좌표를 함께 보관
           aiItems.push({
             ...bestMatch,
-            lat: store.lat, // AI가 눈으로 본 위치 강제 적용
+            visualLat: store.lat, 
+            visualLng: store.lng,
+            apiLat: bestMatch.lat,
+            apiLng: bestMatch.lng,
+            lat: store.lat, // 임시로 시각적 위치 사용
             lng: store.lng,
             source: 'ai'
           });
         } else {
-          // 검색 결과 없음: AI가 이미지에서 직접 추출한 좌표 사용 (신규 발굴)
+          // 검색 결과 없음: AI가 추출한 시각적 좌표 사용
           aiItems.push({
             name: name,
             address: '주소 정보 없음 (AI 스캔)',
             lat: store.lat,
             lng: store.lng,
+            visualLat: store.lat,
+            visualLng: store.lng,
             category: bt.keyword,
             tel: '',
             dist: getDistance(lat, lng, store.lat, store.lng),
@@ -190,7 +193,36 @@ const SearchManager = (() => {
       }
     }));
 
-    // 2km 이내만
+    // --- 전역 영점 조정 (Global Calibration) ---
+    // 매칭된 샘플들을 통해 "현재 AI가 평균적으로 얼마나 삐뚤게 보고 있는지" 계산합니다.
+    const samples = aiItems.filter(item => item.apiLat && item.visualLat);
+    if (samples.length > 0) {
+      let sumDLat = 0, sumDLng = 0;
+      samples.forEach(s => {
+        sumDLat += (s.apiLat - s.visualLat);
+        sumDLng += (s.apiLng - s.visualLng);
+      });
+      
+      const avgDLat = sumDLat / samples.length;
+      const avgDLng = sumDLng / samples.length;
+      
+      console.log(`[AI스캔] 전역 영점 조정 적용: 위도 ${avgDLat.toFixed(6)}, 경도 ${avgDLng.toFixed(6)}`);
+      
+      // 검색 결과가 없는 '순수 AI 발견 매장'들에게 이 공통 오차를 적용하여 위치 보정
+      aiItems.forEach(item => {
+        if (!item.apiLat) {
+          item.lat += avgDLat;
+          item.lng += avgDLng;
+          item.dist = getDistance(lat, lng, item.lat, item.lng);
+        } else {
+          // 이미 매칭된 곳은 검증된 API 좌표를 사용 (가장 정확함)
+          item.lat = item.apiLat;
+          item.lng = item.apiLng;
+        }
+      });
+    }
+
+    // 2km 이내만 수집
     return aiItems.filter(c => c.dist <= 2000);
   }
 

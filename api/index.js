@@ -188,8 +188,9 @@ app.post('/api/ai-scan', async (req, res) => {
     const mapWidth = 400; 
     const mapHeight = 400;
     const endpoints = [
-      'https://naveropenapi.apigw.ntruss.com/map-static/v2/raster',
-      'https://napi.apigw.ntruss.com/map-static/v2/raster'
+      'https://maps.apigw.ntruss.com/map-static/v2/raster',
+      'https://maps.apigw.ntruss.com/map-static/v2/raster-cors',
+      'https://naveropenapi.apigw.ntruss.com/map-static/v2/raster'
     ];
 
     try {
@@ -221,13 +222,15 @@ app.post('/api/ai-scan', async (req, res) => {
       if (!imageBase64) {
         const checkID = NAVER_MAP_CLIENT_ID ? `${NAVER_MAP_CLIENT_ID.substring(0,3)}...` : 'N/A';
         const msg = `NCP 지도 호출 실패 (${lastErrorText})`;
+        const lastAttemptedUrl = `${endpoints[endpoints.length-1]}?center=${lng},${lat}&level=${zoom}...`;
         
         return res.status(502).json({ 
           error: msg,
           details: {
             refererUsed: currentReferer,
             naverId: checkID,
-            ncpError: lastErrorText
+            ncpError: lastErrorText,
+            debugUrl: lastAttemptedUrl
           }
         });
       }

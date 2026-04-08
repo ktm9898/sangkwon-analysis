@@ -278,9 +278,9 @@ app.post('/api/ai-scan', async (req, res) => {
 
     // Step 2: Gemini Vision API로 점포명 추출
     const brands = BRAND_CONTEXT[keyword] || '';
-    const prompt = `지도에서 "${keyword}"(브랜드: ${brands}) 매장을 찾아 JSON으로만 출력하세요. 
+    const prompt = `지도에서 "${keyword}"(브랜드: ${brands}) 매장을 모두 찾아 JSON으로만 출력하세요. 
 형식: [{"name":"이름","x":숫자,"y":숫자},...]
-최대한 많이 찾되, 설명 없이 결과만 출력하세요.`;
+중요: 공백 없이 촘촘하게(Minified) 출력하고, 인삿말 없이 결과만 뱉으세요.`;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -291,7 +291,7 @@ app.post('/api/ai-scan', async (req, res) => {
       }],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 4096 // 출력 한도 확대
+        maxOutputTokens: 32768 // 32k 수준으로 화끈하게 상향
       }
     };
 

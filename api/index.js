@@ -174,13 +174,19 @@ app.post('/api/ai-scan', async (req, res) => {
     }
 
     // Step 1: 네이버 Static Map API로 지도 이미지 요청
-    const mapWidth = 300; // 무료 등급 안정권 사이즈
-    const mapHeight = 300;
-
     let imageBase64 = null;
-    const currentOrigin = 'https://sangkwon-analysis.vercel.app/';
+    
+    // 프론트엔드에서 보낸 referer 혹은 요청 헤더의 referer/origin 사용
+    // 1순위: 프론트엔드가 body에 담아 보낸 referer
+    // 2순위: HTTP 요청 헤더의 referer
+    // 3순위: 기본 상용 주소
+    const currentReferer = req.body.referer || req.headers.referer || req.headers.origin || 'https://sangkwon-analysis.vercel.app/';
+    
+    console.log(`[AI스캔] 요청 접수 (Referer: ${currentReferer})`);
 
     // NCP는 상품 종류에 따라 두 가지 도메인을 번갈아 써야 할 때가 있습니다. (210 에러 방지용)
+    const mapWidth = 400; 
+    const mapHeight = 400;
     const endpoints = [
       'https://naveropenapi.apigw.ntruss.com/map-static/v2/raster',
       'https://napi.apigw.ntruss.com/map-static/v2/raster'
@@ -190,14 +196,14 @@ app.post('/api/ai-scan', async (req, res) => {
       let lastErrorText = '';
       for (const baseUrl of endpoints) {
         const fullUrl = `${baseUrl}?center=${lng},${lat}&level=${zoom}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=1`;
-        console.log(`[AI스캔] 시도 중: ${baseUrl}`);
+        console.log(`[AI스캔] NCP 호출 시도: ${baseUrl} (Referer: ${currentReferer})`);
 
         const mapResp = await fetch(fullUrl, {
           headers: {
             'X-NCP-APIGW-API-KEY-ID': NAVER_MAP_CLIENT_ID,
             'X-NCP-APIGW-API-KEY': NAVER_MAP_CLIENT_SECRET,
-            'Referer': currentOrigin,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'Referer': currentReferer,
+            'User-Agent': 'Mozilla/5.0'
           }
         });
 
@@ -209,18 +215,21 @@ app.post('/api/ai-scan', async (req, res) => {
         } else {
           lastErrorText = await mapResp.text();
           console.warn(`[AI스캔] ${baseUrl} 실패: ${mapResp.status} ${lastErrorText}`);
-          // 401 혹은 210이면 다음 도메인으로 시도
         }
       }
 
       if (!imageBase64) {
-        const checkID = NAVER_MAP_CLIENT_ID ? `${NAVER_MAP_CLIENT_ID.substring(0,3)}...${NAVER_MAP_CLIENT_ID.slice(-3)}` : '비어있음';
-        const checkSecret = NAVER_MAP_CLIENT_SECRET ? `${NAVER_MAP_CLIENT_SECRET.substring(0,3)}...${NAVER_MAP_CLIENT_SECRET.slice(-3)}` : '비어있음';
+        const checkID = NAVER_MAP_CLIENT_ID ? `${NAVER_MAP_CLIENT_ID.substring(0,3)}...` : 'N/A';
+        const msg = `NCP 지도 호출 실패 (${lastErrorText})`;
         
-        let customError = `NCP 모든 경로 시도 실패. \n최종 답변: ${lastErrorText}`;
-        customError += `\n\n[코드상의 현재 설정 대조]\nID: ${checkID}\nSecret: ${checkSecret}\nReferer: ${currentOrigin}`;
-        
-        return res.status(502).json({ error: customError });
+        return res.status(502).json({ 
+          error: msg,
+          details: {
+            refererUsed: currentReferer,
+            naverId: checkID,
+            ncpError: lastErrorText
+          }
+        });
       }
     } catch (e) {
       console.error('[AI스캔] Static Map 요청 중 치명적 오류:', e.message);

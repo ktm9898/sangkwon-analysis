@@ -108,7 +108,8 @@ const SearchManager = (() => {
           lat, lng,
           businessType: bt.keyword,
           keyword: bt.keyword,
-          zoom
+          zoom,
+          referer: window.location.href // 현재 도메인 정보 전달
         })
       });
 
@@ -197,44 +198,37 @@ const SearchManager = (() => {
   const wait = (ms) => new Promise(res => setTimeout(res, ms));
 
   async function executeNaverSearch(keyword, allItems, onProgress) {
-    const queries = [keyword, `근처 ${keyword}`, `주변 ${keyword}`];
-    if (onProgress) onProgress(`🔍 네이버 API 정밀 수색 중...`);
-
-    for (const q of queries) {
-      const DISPLAY = 5; 
-      const PAGES = 10;  // 15에서 10으로 조정하여 속도 조절
+    const queries = [keyword, `주변 ${keyword}`];
+    
+    // 쿼리별 병렬 실행
+    await Promise.all(queries.map(async (q) => {
+      const DISPLAY = 5; // 네이버 지역검색 API의 최대 한도는 5입니다.
+      const PAGES = 6;   // 총 30개 수집
       
-      for (let i = 0; i < PAGES; i++) {
+      const pageIndexes = Array.from({ length: PAGES }, (_, i) => i);
+      
+      // 페이지별 병렬 실행
+      await Promise.all(pageIndexes.map(async (i) => {
         const start = (i * DISPLAY) + 1;
         const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(q)}&display=${DISPLAY}&start=${start}&sort=sim&_cb=${Date.now()}`;
         
         try {
-          // 429 방지를 위해 요청 당 250ms 대기 (더욱 안전하게)
-          await wait(250);
+          // 너무 동시에 요청하면 429 오류가 날 수 있으므로 아주 짧은 랜덤 대기 부여
+          await wait(Math.random() * 200);
           
           const response = await fetch(url);
-          
-          if (response.status === 429) {
-            if (onProgress) onProgress(`⏳ API 속도 제한 발생, 잠시 대기 중...`);
-            await wait(1000); // 1초 대기 후 재시도 없음(다음 쿼리로)
-            break;
-          }
+          if (!response.ok) return;
 
-          if (!response.ok) break;
           const data = await response.json();
           if (data.items && data.items.length > 0) {
             allItems.push(...data.items);
             if (onProgress) onProgress(`🔍 탐색 중... (${allItems.length}개 발견)`);
-            if (data.items.length < DISPLAY) break; 
-          } else {
-            break;
           }
         } catch (e) {
           console.error('[Naver API] 오류:', e);
-          break;
         }
-      }
-    }
+      }));
+    }));
   }
 
   /**

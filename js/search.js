@@ -20,11 +20,12 @@ const SearchManager = (() => {
     // --- 1) 네이버 지역검색 API ---
     const apiResults = await searchByAPI(lat, lng, bt, onProgress);
 
-    // --- 2) Gemini AI 지도 스캔 ---
+    // --- 2) Gemini AI 지도 스캔 (지역명 정보를 넘겨서 더 정확한 매칭 도모)
     let aiResults = [];
     try {
       if (onProgress) onProgress('🤖 AI 지도 스캔 중...');
-      aiResults = await scanMapWithAI(lat, lng, bt);
+      const regionName = apiResults.regionName || '';
+      aiResults = await scanMapWithAI(lat, lng, bt, onProgress, regionName);
     } catch (e) {
       console.warn('[AI스캔] 실패, API 결과만 사용:', e.message);
       if (onProgress) onProgress('⚠️ AI 스캔 실패, API 결과 사용');
@@ -93,7 +94,7 @@ const SearchManager = (() => {
   /**
    * Gemini Vision AI 지도 스캔 → 점포명 추출 → 좌표 변환
    */
-  async function scanMapWithAI(lat, lng, bt, onProgress) {
+  async function scanMapWithAI(lat, lng, bt, onProgress, regionName = '') {
     const scanZoom = 17; // 고정된 줌 레벨 (반경 500m 수색 최적화)
 
     let storeNames = [];
@@ -405,6 +406,7 @@ const SearchManager = (() => {
   return {
     searchCompetitors,
     searchByKeyword,
-    scanMapWithAI: (lat, lng, bt) => scanMapWithAI(lat, lng, CONFIG.BUSINESS_TYPES[bt] || { keyword: bt })
+    scanMapWithAI: (lat, lng, bt, onProgress, region) => 
+      scanMapWithAI(lat, lng, CONFIG.BUSINESS_TYPES[bt] || { keyword: bt }, onProgress, region)
   };
 })();

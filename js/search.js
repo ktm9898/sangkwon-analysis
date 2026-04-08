@@ -153,22 +153,27 @@ const SearchManager = (() => {
               const converted = convertNaverItem(item);
               if (!converted) continue;
               const offset = getDistance(store.lat, store.lng, converted.lat, converted.lng);
-              if (offset < 50 && offset < minOffset) { // 50m 이내 매칭만 인정
+              // AI가 본 위치와 API 검색 결과가 100m 이내라면 동일 업체로 간주하고 정확한 좌표(API) 활용
+              if (offset < 100 && offset < minOffset) {
                 minOffset = offset;
                 bestMatch = converted;
+                // AI가 직접 눈으로 본 위치라는 정보 보존
+                bestMatch.aiPixel = { x: store.pixelX, y: store.pixelY };
               }
             }
           }
         }
 
         if (bestMatch) {
-          // 검색 성공: API 데이터 사용 (좌표는 AI 검색 결과로 살짝 보정하거나 검색 결과 사용)
-          bestMatch.source = 'ai';
-          bestMatch.dist = getDistance(lat, lng, bestMatch.lat, bestMatch.lng);
-          aiItems.push(bestMatch);
+          // 검색 성공: 메타데이터(전화번호 등)만 가져오고, 위치는 AI가 본 곳을 최대한 존중
+          aiItems.push({
+            ...bestMatch,
+            lat: store.lat, // AI가 눈으로 본 위치 강제 적용
+            lng: store.lng,
+            source: 'ai'
+          });
         } else {
-          // 검색 실패 혹은 매칭 안됨: AI가 이미지에서 직접 추출한 좌표 강제 사용 (글자 읽기 기반)
-          console.log(`[AI스캔] "${name}" 검색 결과 없음. AI 추출 좌표 사용.`);
+          // 검색 결과 없음: AI가 이미지에서 직접 추출한 좌표 사용 (신규 발굴)
           aiItems.push({
             name: name,
             address: '주소 정보 없음 (AI 스캔)',

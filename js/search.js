@@ -118,53 +118,68 @@ const SearchManager = (() => {
       }
 
       const data = await response.json();
-      storeNames = data.storeNames || [];
-      if (onProgress) onProgress(`✅ AI 스캔 완료 (${storeNames.length}개 추가 발견)`);
+      const aiStores = data.stores || [];
+      if (onProgress) onProgress(`✅ AI 스캔 완료 (${aiStores.length}개 위치 특정)`);
     } catch (e) {
       console.warn('[AI스캔] 실패:', e.message);
       if (onProgress) onProgress(`⚠️ AI 스캔 실패: ${e.message}`);
       return [];
     }
 
-    if (storeNames.length === 0) return [];
+    if (aiStores.length === 0) return [];
 
-    console.log(`[AI스캔] ${storeNames.length}개 점포명 추출:`, storeNames);
+    console.log(`[AI스캔] ${aiStores.length}개 점포 위치 특정:`, aiStores);
 
-    // 각 점포명을 네이버 지역검색으로 좌표 확보 (병렬, 최대 30개)
-    const searchTargets = storeNames.slice(0, 30);
+    // 각 점포 정보를 기반으로 상세 데이터 보완 (병렬)
     const aiItems = [];
-
-    await Promise.all(searchTargets.map(async (name) => {
+    await Promise.all(aiStores.map(async (store) => {
+      const name = store.name;
       try {
-        // AI가 찾은 이름에 지역명을 붙여 검색 (정확한 지점 좌표 확보를 위함)
+        // 1순위: AI가 찾은 이름으로 네이버 검색 시도 (전화번호, 상세주소 등 확보)
         const regionContext = regionName || '';
         const searchQuery = `${regionContext} ${name}`.trim();
         const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(searchQuery)}&display=5&start=1&_cb=${Date.now()}`;
         const resp = await fetch(url);
-        if (!resp.ok) return;
-        const d = await resp.json();
         
-        if (d.items && d.items.length > 0) {
-          // AI가 찾은 이름으로 검색된 결과들 중 주소가 중복되지 않는 것 찾기
-          let foundNew = false;
-          for (const item of d.items) {
-            const converted = convertNaverItem(item);
-            if (!converted) continue;
-
-            const addr = item.roadAddress || item.address || '';
-            converted.address = addr;
-            converted.dist = getDistance(lat, lng, converted.lat, converted.lng);
-            converted.source = 'ai';
-            
-            aiItems.push(converted);
-            foundNew = true;
-            break; // 우선 가장 정확한 첫 번째 매칭만 채택
+        let bestMatch = null;
+        if (resp.ok) {
+          const d = await resp.json();
+          if (d.items && d.items.length > 0) {
+            // 검색 결과 중 AI가 찍은 좌표와 가장 가까운 것 선택 (오차 보정)
+            let minOffset = Infinity;
+            for (const item of d.items) {
+              const converted = convertNaverItem(item);
+              if (!converted) continue;
+              const offset = getDistance(store.lat, store.lng, converted.lat, converted.lng);
+              if (offset < 50 && offset < minOffset) { // 50m 이내 매칭만 인정
+                minOffset = offset;
+                bestMatch = converted;
+              }
+            }
           }
+        }
+
+        if (bestMatch) {
+          // 검색 성공: API 데이터 사용 (좌표는 AI 검색 결과로 살짝 보정하거나 검색 결과 사용)
+          bestMatch.source = 'ai';
+          bestMatch.dist = getDistance(lat, lng, bestMatch.lat, bestMatch.lng);
+          aiItems.push(bestMatch);
         } else {
-          console.log(`[AI스캔] "${searchQuery}"의 좌표를 찾지 못했습니다.`);
+          // 검색 실패 혹은 매칭 안됨: AI가 이미지에서 직접 추출한 좌표 강제 사용 (글자 읽기 기반)
+          console.log(`[AI스캔] "${name}" 검색 결과 없음. AI 추출 좌표 사용.`);
+          aiItems.push({
+            name: name,
+            address: '주소 정보 없음 (AI 스캔)',
+            lat: store.lat,
+            lng: store.lng,
+            category: bt.keyword,
+            tel: '',
+            dist: getDistance(lat, lng, store.lat, store.lng),
+            source: 'ai'
+          });
         }
       } catch (e) {
-        console.error(`[AI스캔] "${name}" 변환 에러:`, e.message);
+        console.error(`[AI스캔] "${name}" 처리 에러:`, e.message);
       }
     }));
 
@@ -244,23 +259,29 @@ const SearchManager = (() => {
    * API 결과 + AI 결과 병합 및 중복 제거
    */
   function mergeAndDeduplicate(apiResults, aiResults, baseLat, baseLng) {
-    // API 결과 우선, AI 결과로 보완
+    // API 결과 우선
     const combined = [...apiResults];
 
     aiResults.forEach(aiItem => {
-      // API 결과에 이미 같은 주소/이름이 있는지 체크
-      const isDuplicate = combined.some(existing => {
-        const nameMatch = existing.name === aiItem.name;
-        const addrMatch = (existing.address && aiItem.address) && 
-                         (existing.address.substring(0, 15) === aiItem.address.substring(0, 15));
-        const dist = getDistance(existing.lat, existing.lng, aiItem.lat, aiItem.lng);
-        
-        // 이름이 같고 주소가 거의 같거나(15자), 거리가 매우 가까운(10m) 경우만 중복으로 간주
-        return (nameMatch && addrMatch) || (nameMatch && dist < 10);
+      // API 결과 중 가장 가까운 항목 찾기 (위치 기반)
+      let minDistance = Infinity;
+      let closestItem = null;
+
+      combined.forEach(existing => {
+        const d = getDistance(existing.lat, existing.lng, aiItem.lat, aiItem.lng);
+        if (d < minDistance) {
+          minDistance = d;
+          closestItem = existing;
+        }
       });
 
-      if (!isDuplicate) {
-        combined.push(aiItem);
+      // 반경 15m 이내에 이미 같은 상호명이 있거나, 아주 가까운(10m 이내) 마커가 있으면 중복 처리
+      const isSpatialDuplicate = (minDistance < 10);
+      const isNameAndNearMatch = (minDistance < 25 && closestItem && closestItem.name === aiItem.name);
+
+      if (!isSpatialDuplicate && !isNameAndNearMatch) {
+         // 중복이 아니면 추가
+         combined.push(aiItem);
       }
     });
 

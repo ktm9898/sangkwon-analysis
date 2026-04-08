@@ -150,6 +150,40 @@ app.post('/api/isochrone', async (req, res) => {
 });
 
 /**
+ * Mercator 도법 변환을 위한 헬퍼 함수 (EPSG:3857)
+ */
+function latLngToWorld(lat, lng) {
+  const sinLat = Math.sin(lat * Math.PI / 180);
+  return {
+    x: (lng + 180) / 360,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI))
+  };
+}
+
+function worldToLatLng(x, y) {
+  const lng = x * 360 - 180;
+  const n = Math.PI - 2 * Math.PI * y;
+  const lat = 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return { lat, lng };
+}
+
+function getLatLngFromPixel(centerLat, centerLng, zoom, px, py, size = 1024) {
+  const worldCenter = latLngToWorld(centerLat, centerLng);
+  // Naver Maps v2 Raster는 256px 타일 기준입니다.
+  const worldSize = Math.pow(2, zoom) * 256;
+  
+  const dx = (px - size / 2) / worldSize;
+  const dy = (py - size / 2) / worldSize;
+  
+  const targetWorld = {
+    x: worldCenter.x + dx,
+    y: worldCenter.y + dy
+  };
+  
+  return worldToLatLng(targetWorld.x, targetWorld.y);
+}
+
+/**
  * [POST] AI 지도 스캔 — 네이버 Static Map + Gemini Vision
  * 기준점 좌표 + 업종 → 지도 이미지 → Gemini가 점포명 추출
  */
@@ -245,14 +279,16 @@ app.post('/api/ai-scan', async (req, res) => {
     // Step 2: Gemini Vision API로 점포명 추출
     const brands = BRAND_CONTEXT[keyword] || '';
     const prompt = `당신은 대한민국 상권 분석 전문가입니다. 
-제공된 지도 이미지에서 "${keyword}" 업종에 해당하는 모든 상점/점포 이름을 추출하세요.
+제공된 지도 이미지에서 "${keyword}" 업종에 해당하는 모든 상점/점포 이름을 추출하고 위치를 찍으세요.
 
 **분석 지침:**
 1. **타켓 업종**: "${keyword}" (주요 브랜드: ${brands})
-2. **미션**: 지도에 텍스트로 표시된 모든 "${keyword}" 매장명을 찾아내세요. (예: "CU", "스타벅스", "김밥천국" 등)
-3. **정기성**: 글자가 작아도 선명하다면 반드시 포함하세요.
-4. **출력 형식**: 오직 JSON 배열로만 응답하세요. 예: ["매장A", "매장B", ...]
-5. **금지**: 설명이나 인삿말 없이 오직 JSON만 출력하세요.`;
+2. **미션**: 지도에 텍스트로 표시된 모든 "${keyword}" 매장명을 찾아내고, 해당 글자가 위치한 정확한 중심 좌표(이미지 상의 위치)를 기록하세요.
+3. **위치 좌표**: 이미지의 가로(x), 세로(y) 좌표를 0에서 1000 사이의 숫자로 응답하세요. 
+   - (0, 0)은 이미지 왼쪽 상단, (1000, 1000)은 오른쪽 하단입니다. (500, 500)은 정중앙입니다.
+4. **출력 형식**: 오직 JSON 배열로만 응답하세요.
+   예: [{"name": "매장A", "x": 450, "y": 300}, {"name": "매장B", "x": 720, "y": 640}, ...]
+5. **금지**: 설명이나 인삿말 없이 오직 JSON 배열만 출력하세요.`;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -291,21 +327,39 @@ app.post('/api/ai-scan', async (req, res) => {
     const geminiData = await geminiResp.json();
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
 
-    // JSON 파싱 (Gemini가 ```json ... ``` 형태로 반환할 수 있음)
-    let storeNames = [];
+    // JSON 파싱 및 실제 지리 좌표 변환
+    let foundStores = [];
     try {
       const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-      storeNames = JSON.parse(cleanJson);
+      const rawStores = JSON.parse(cleanJson);
+      
+      if (Array.isArray(rawStores)) {
+        foundStores = rawStores.map(s => {
+          if (!s.name || s.x === undefined || s.y === undefined) return null;
+          
+          // Gemini의 0~1000 좌표를 1024px 이미지 좌표로 변환
+          const px = (s.x / 1000) * 1024;
+          const py = (s.y / 1000) * 1024;
+          
+          // 픽셀 좌표 → 위경도 변환
+          const geo = getLatLngFromPixel(lat, lng, zoom, px, py, 1024);
+          
+          return {
+            name: s.name,
+            lat: geo.lat,
+            lng: geo.lng,
+            pixelX: s.x,
+            pixelY: s.y
+          };
+        }).filter(s => s !== null);
+      }
     } catch (e) {
-      console.warn('[AI스캔] JSON 파싱 실패:', rawText);
+      console.warn('[AI스캔] JSON 파싱 혹은 좌표 변환 실패:', rawText);
     }
 
-    // 유효성 검사 (문자열 배열)
-    storeNames = storeNames.filter(s => typeof s === 'string' && s.trim().length > 0);
+    console.log(`[AI스캔] 분석 완료: ${foundStores.length}개 점포 위치 특정`);
 
-    console.log(`[AI스캔] Gemini 추출 점포명 ${storeNames.length}개:`, storeNames);
-
-    const result = { storeNames, zoom };
+    const result = { storeNames: foundStores.map(s => s.name), stores: foundStores, zoom };
     setCache(cacheKey, result);
     res.json(result);
 

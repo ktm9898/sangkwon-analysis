@@ -185,8 +185,8 @@ app.post('/api/ai-scan', async (req, res) => {
     console.log(`[AI스캔] 요청 접수 (Referer: ${currentReferer})`);
 
     // NCP는 상품 종류에 따라 두 가지 도메인을 번갈아 써야 할 때가 있습니다. (210 에러 방지용)
-    const mapWidth = 400; 
-    const mapHeight = 400;
+    const mapWidth = 1024; 
+    const mapHeight = 1024;
     const endpoints = [
       'https://maps.apigw.ntruss.com/map-static/v2/raster',
       'https://maps.apigw.ntruss.com/map-static/v2/raster-cors',
@@ -196,6 +196,7 @@ app.post('/api/ai-scan', async (req, res) => {
     try {
       let lastErrorText = '';
       for (const baseUrl of endpoints) {
+        // scale=1을 사용하여 1024x1024의 최대 가용 영역 확보 (반경 500m 커버)
         const fullUrl = `${baseUrl}?center=${lng},${lat}&level=${zoom}&w=${mapWidth}&h=${mapHeight}&format=jpg&maptype=basic&scale=1`;
         console.log(`[AI스캔] NCP 호출 시도: ${baseUrl} (Referer: ${currentReferer})`);
 

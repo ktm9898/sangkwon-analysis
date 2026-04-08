@@ -94,8 +94,7 @@ const SearchManager = (() => {
    * Gemini Vision AI 지도 스캔 → 점포명 추출 → 좌표 변환
    */
   async function scanMapWithAI(lat, lng, bt, onProgress) {
-    const mapState = MapManager.getMapState();
-    const zoom = Math.max(mapState ? mapState.zoom : CONFIG.AI_SCAN_ZOOM, 16);
+    const scanZoom = 17; // 고정된 줌 레벨 (반경 500m 수색 최적화)
 
     let storeNames = [];
     try {
@@ -108,7 +107,7 @@ const SearchManager = (() => {
           lat, lng,
           businessType: bt.keyword,
           keyword: bt.keyword,
-          zoom,
+          zoom: scanZoom, // 고정된 줌 레벨 전달
           referer: window.location.href // 현재 도메인 정보 전달
         })
       });

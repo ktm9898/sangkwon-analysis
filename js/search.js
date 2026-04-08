@@ -121,6 +121,9 @@ const SearchManager = (() => {
 
       const data = await response.json();
       aiStores = data.stores || [];
+      if (data.rawText) {
+        console.log('[AI스캔] AI 응답 원문:', data.rawText);
+      }
       if (onProgress) onProgress(`✅ AI 스캔 완료 (${aiStores.length}개 위치 특정)`);
     } catch (e) {
       console.warn('[AI스캔] 실패:', e.message);

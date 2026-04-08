@@ -278,21 +278,12 @@ app.post('/api/ai-scan', async (req, res) => {
 
     // Step 2: Gemini Vision API로 점포명 추출
     const brands = BRAND_CONTEXT[keyword] || '';
-    const prompt = `당신은 대한민국 상권 분석 전문가입니다. 
-제공된 지도 이미지에서 "${keyword}" 업종에 해당하는 모든 매장의 위치를 찾아내세요.
-
-**분석 지침:**
-1. **타켓 업종**: "${keyword}" (주요 브랜드: ${brands})
-2. **미션**: 지도상에서 "${keyword}" 관련 **상호명(텍스트)을 가장 먼저 찾으세요.** (수색의 최우선 단서)
-3. **위치 특정**: 
-   - 해당 텍스트의 **바로 위(Directly Above)**에 위치한 브랜드 아이콘(심볼)을 찾으세요. 
-   - 아이콘이 보인다면 **아이콘의 정중앙 좌표**를, 아이콘이 불분명하다면 **텍스트의 정중앙 좌표**를 찍으세요.
-4. **위치 좌표**: 가로(x), 세로(y) 좌표를 0에서 1000 사이의 숫자로 응답하세요. 
-   - (0, 0)은 이미지 왼쪽 상단, (1000, 1000)은 오른쪽 하단입니다.
-4. **출력 형식**: 반드시 아래와 같은 JSON 배열 형식으로만 응답하세요.
-   [{"name": "매장명", "x": 숫자, "y": 숫자}, ...]
-
-설명이나 인삿말 없이 오직 유효한 JSON 배열만 출력하세요.`;
+    const prompt = `지도 이미지에서 "${keyword}" 업종 매장을 모두 찾아 JSON 배열로 출력하세요.
+- name: 매장 이름
+- x: 가로 위치 (0-1000)
+- y: 세로 위치 (0-1000)
+예: [{"name": "CU", "x": 500, "y": 400}, ...]
+주변 아이콘이나 글자 위치를 기준으로 정확한 좌표를 찍어주세요. 인삿말 없이 오직 JSON 배열만 출력하세요.`;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -310,9 +301,8 @@ app.post('/api/ai-scan', async (req, res) => {
         ]
       }],
       generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 2048,
-        response_mime_type: "application/json"
+        temperature: 0.2,
+        maxOutputTokens: 2048
       }
     };
 
@@ -363,7 +353,7 @@ app.post('/api/ai-scan', async (req, res) => {
 
     console.log(`[AI스캔] 분석 완료: ${foundStores.length}개 점포 위치 특정`);
 
-    const result = { storeNames: foundStores.map(s => s.name), stores: foundStores, zoom };
+    const result = { storeNames: foundStores.map(s => s.name), stores: foundStores, zoom, rawText };
     setCache(cacheKey, result);
     res.json(result);
 

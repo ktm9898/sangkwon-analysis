@@ -136,22 +136,32 @@ const SearchManager = (() => {
 
     await Promise.all(searchTargets.map(async (name) => {
       try {
-        // AI가 찾은 이름 그대로 검색 (정확도를 위해 display=5로 넉넉히 수집 후 거리순 필터링)
-        const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(name)}&display=5&start=1&_cb=${Date.now()}`;
+        // AI가 찾은 이름에 지역명을 붙여 검색 (정확한 지점 좌표 확보를 위함)
+        const regionContext = regionName || '';
+        const searchQuery = `${regionContext} ${name}`.trim();
+        const url = `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(searchQuery)}&display=5&start=1&_cb=${Date.now()}`;
         const resp = await fetch(url);
         if (!resp.ok) return;
         const d = await resp.json();
         
         if (d.items && d.items.length > 0) {
-          // AI가 찾은 이름과 가장 유사하거나 가까운 첫 번째 결과 채택
-          const converted = convertNaverItem(d.items[0]);
-          if (converted) {
+          // AI가 찾은 이름으로 검색된 결과들 중 주소가 중복되지 않는 것 찾기
+          let foundNew = false;
+          for (const item of d.items) {
+            const converted = convertNaverItem(item);
+            if (!converted) continue;
+
+            const addr = item.roadAddress || item.address || '';
+            converted.address = addr;
             converted.dist = getDistance(lat, lng, converted.lat, converted.lng);
             converted.source = 'ai';
+            
             aiItems.push(converted);
+            foundNew = true;
+            break; // 우선 가장 정확한 첫 번째 매칭만 채택
           }
         } else {
-          console.log(`[AI스캔] "${name}"의 좌표를 찾지 못했습니다.`);
+          console.log(`[AI스캔] "${searchQuery}"의 좌표를 찾지 못했습니다.`);
         }
       } catch (e) {
         console.error(`[AI스캔] "${name}" 변환 에러:`, e.message);
@@ -238,11 +248,15 @@ const SearchManager = (() => {
     const combined = [...apiResults];
 
     aiResults.forEach(aiItem => {
-      // API 결과에 이미 같은 위치/이름이 있으면 스킵
+      // API 결과에 이미 같은 주소/이름이 있는지 체크
       const isDuplicate = combined.some(existing => {
+        const nameMatch = existing.name === aiItem.name;
+        const addrMatch = (existing.address && aiItem.address) && 
+                         (existing.address.substring(0, 15) === aiItem.address.substring(0, 15));
         const dist = getDistance(existing.lat, existing.lng, aiItem.lat, aiItem.lng);
-        // 이름이 같고 5m 이내인 경우만 중복으로 간주
-        return (existing.name === aiItem.name) && (dist < 5);
+        
+        // 이름이 같고 주소가 거의 같거나(15자), 거리가 매우 가까운(10m) 경우만 중복으로 간주
+        return (nameMatch && addrMatch) || (nameMatch && dist < 10);
       });
 
       if (!isDuplicate) {

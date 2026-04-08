@@ -64,15 +64,8 @@ const SearchManager = (() => {
     
     // 속도와 429 방어를 동시에 잡기 위해 50ms 짧은 대기시간을 둔 순차 검색 수행
     for (const subKey of keywordsToSearch) {
-      const exactQuery = regionName ? `${regionName} ${subKey}` : subKey;
-      await executeNaverSearch(exactQuery, allItems, onProgress);
+      await executeNaverSearch(subKey, allItems, onProgress);
       await wait(50); // 아주 짧은 지연 (네이버 차단 방지)
-
-      if (regionName && regionName.match(/[0-9]+가$/)) {
-        const broadRegion = regionName.replace(/[0-9]+가$/, '');
-        await executeNaverSearch(`${broadRegion} ${subKey}`, allItems, onProgress);
-        await wait(50);
-      }
     }
 
     const competitors = allItems
@@ -248,7 +241,7 @@ const SearchManager = (() => {
     const data = await response.json();
     if (!data.items || data.items.length === 0) return [];
 
-    return data.items
+    const results = data.items
       .map(item => convertNaverItem(item))
       .filter(c => c !== null)
       .map(c => {
@@ -258,6 +251,12 @@ const SearchManager = (() => {
         c.source = 'manual';
         return c;
       });
+
+    // 기준점 거리순으로 정렬하여 반환
+    if (baseLat && baseLng) {
+      results.sort((a, b) => a.dist - b.dist);
+    }
+    return results;
   }
 
   // ============================================================

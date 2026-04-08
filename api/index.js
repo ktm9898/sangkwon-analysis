@@ -153,11 +153,11 @@ app.post('/api/isochrone', async (req, res) => {
  * Mercator 도법 변환을 위한 헬퍼 함수 (EPSG:3857)
  */
 function latLngToWorld(lat, lng) {
+  const x = (lng + 180) / 360;
   const sinLat = Math.sin(lat * Math.PI / 180);
-  return {
-    x: (lng + 180) / 360,
-    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI))
-  };
+  // Web Mercator (EPSG:3857) 정밀 공식
+  const y = 0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI);
+  return { x, y };
 }
 
 function worldToLatLng(x, y) {
@@ -169,15 +169,16 @@ function worldToLatLng(x, y) {
 
 function getLatLngFromPixel(centerLat, centerLng, zoom, px, py, size = 1024) {
   const worldCenter = latLngToWorld(centerLat, centerLng);
-  // Naver Maps v2 Raster는 256px 타일 기준입니다.
-  const worldSize = Math.pow(2, zoom) * 256;
+  // 네이버/구글 맵의 줌 레벨에 따른 월드맵 전체 픽셀 크기
+  const worldPixelSize = Math.pow(2, zoom) * 256;
   
-  const dx = (px - size / 2) / worldSize;
-  const dy = (py - size / 2) / worldSize;
+  // 이미지 중심에서부터의 픽셀 거리 (0.5 단위로 정밀하게)
+  const dx = (px - size / 2) / worldPixelSize;
+  const dy = (py - size / 2) / worldPixelSize;
   
   const targetWorld = {
     x: worldCenter.x + dx,
-    y: worldCenter.y + dy
+    y: worldCenter.y + dy // y축은 아래가 큰 값이므로 더해주는 것이 맞음
   };
   
   return worldToLatLng(targetWorld.x, targetWorld.y);

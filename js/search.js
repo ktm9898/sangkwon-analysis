@@ -128,9 +128,13 @@ const SearchManager = (() => {
       return [];
     }
 
-    if (aiStores.length === 0) return [];
+    if (aiStores.length === 0) {
+      console.log('[AI스캔] AI가 이미지에서 상점을 발견하지 못했습니다. (0개)');
+      return [];
+    }
 
-    console.log(`[AI스캔] ${aiStores.length}개 점포 위치 특정:`, aiStores);
+    console.log(`[AI스캔] AI 데이터 수신 성공! ${aiStores.length}개 업체를 발견함.`);
+    console.table(aiStores);
 
     // 각 점포 정보를 기반으로 상세 데이터 보완 (병렬)
     const aiItems = [];

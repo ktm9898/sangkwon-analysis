@@ -49,12 +49,14 @@ const SearchManager = (() => {
    * 네이버 지역검색 API 기반 자동 탐색
    */
   async function searchByAPI(lat, lng, bt, onProgress) {
-    let regionName = '';
+    let regionData = { gu: '', dong: '', full: '' };
     try {
-      regionName = await getRegionName(lat, lng);
+      regionData = await getRegionName(lat, lng);
     } catch (e) {
       console.warn('[검색] 역지오코딩 실패:', e.message);
     }
+
+    const { gu, dong, full: regionName } = regionData;
 
     const keywordsToSearch = bt.subKeywords && bt.subKeywords.length > 0
       ? bt.subKeywords
@@ -62,10 +64,19 @@ const SearchManager = (() => {
 
     const allItems = [];
     
-    // 속도와 429 방어를 동시에 잡기 위해 50ms 짧은 대기시간을 둔 순차 검색 수행
+    // 다단계 수색: [동 + 키워드] 및 [구 + 키워드] 병렬 실행으로 경계 지역 누락 방지
     for (const subKey of keywordsToSearch) {
-      await executeNaverSearch(subKey, allItems, onProgress);
-      await wait(50); // 아주 짧은 지연 (네이버 차단 방지)
+      const searchTasks = [];
+      
+      // 1단계: 동 단위 정밀 수색
+      if (dong) searchTasks.push(executeNaverSearch(`${dong} ${subKey}`, allItems, onProgress));
+      // 2단계: 구 단위 광역 수색 (경계 지역 포착용)
+      if (gu && gu !== dong) searchTasks.push(executeNaverSearch(`${gu} ${subKey}`, allItems, onProgress));
+      // 3단계: 키워드 단독 수색 (범용)
+      searchTasks.push(executeNaverSearch(subKey, allItems, onProgress));
+
+      await Promise.all(searchTasks);
+      await wait(50); // 짧은 지연 (네이버 차단 방지)
     }
 
     const competitors = allItems
@@ -79,6 +90,9 @@ const SearchManager = (() => {
       .filter(c => c.dist <= 2000);
 
     const unique = deduplicateByNameAndCoord(competitors);
+    // 거리순 정렬
+    unique.sort((a, b) => a.dist - b.dist);
+
     console.log(`[API검색] 유효 경쟁업체: ${unique.length}개 (지역: ${regionName})`);
     unique.regionName = regionName;
     return unique;
@@ -233,15 +247,27 @@ const SearchManager = (() => {
   async function searchByKeyword(keyword, baseLat, baseLng) {
     if (!keyword || keyword.trim().length === 0) return [];
 
-    const response = await fetch(
-      `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(keyword.trim())}&display=20&start=1`
-    );
-    if (!response.ok) return [];
+    let regionData = { gu: '', dong: '' };
+    if (baseLat && baseLng) {
+       try { regionData = await getRegionName(baseLat, baseLng); } catch(e) {}
+    }
 
-    const data = await response.json();
-    if (!data.items || data.items.length === 0) return [];
+    const searchQueries = [keyword];
+    if (regionData.dong) searchQueries.push(`${regionData.dong} ${keyword}`);
+    if (regionData.gu) searchQueries.push(`${regionData.gu} ${keyword}`);
 
-    const results = data.items
+    const allItems = [];
+    await Promise.all(searchQueries.map(async (q) => {
+      const response = await fetch(
+        `${CONFIG.PROXY_URL}/api/search?query=${encodeURIComponent(q.trim())}&display=20&start=1`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.items) allItems.push(...data.items);
+      }
+    }));
+
+    const results = allItems
       .map(item => convertNaverItem(item))
       .filter(c => c !== null)
       .map(c => {
@@ -252,11 +278,12 @@ const SearchManager = (() => {
         return c;
       });
 
-    // 기준점 거리순으로 정렬하여 반환
+    // 중복 제거 및 거리순 정렬하여 반환
+    const uniqueResults = deduplicateByNameAndCoord(results);
     if (baseLat && baseLng) {
-      results.sort((a, b) => a.dist - b.dist);
+      uniqueResults.sort((a, b) => a.dist - b.dist);
     }
-    return results;
+    return uniqueResults;
   }
 
   // ============================================================
@@ -392,30 +419,46 @@ const SearchManager = (() => {
   }
 
   async function getRegionName(lat, lng) {
-    let regionStr = null;
+    let gu = '', dong = '', full = '';
+
+    const processResults = (results) => {
+      if (results && results.length > 0) {
+        const r = results[0].region;
+        gu = r?.area2?.name || '';
+        dong = r?.area3?.name || '';
+        full = `${gu} ${dong}`.trim();
+        return true;
+      }
+      return false;
+    };
 
     if (typeof naver !== 'undefined' && naver.maps) {
-      regionStr = await requestReverseGeocode(lat, lng, 'addr');
-      if (!regionStr) regionStr = await requestReverseGeocode(lat, lng, 'legalcode');
+      const res1 = await new Promise(resolve => {
+        naver.maps.Service.reverseGeocode({ coords: new naver.maps.LatLng(lat, lng), orders: 'addr' }, (s, r) => resolve(r));
+      });
+      if (!processResults(res1?.v2?.results)) {
+        const res2 = await new Promise(resolve => {
+          naver.maps.Service.reverseGeocode({ coords: new naver.maps.LatLng(lat, lng), orders: 'legalcode' }, (s, r) => resolve(r));
+        });
+        processResults(res2?.v2?.results);
+      }
     }
 
-    if (!regionStr) {
+    if (!full) {
       try {
         const osmRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
         if (osmRes.ok) {
           const osmData = await osmRes.json();
           if (osmData?.address) {
-            const gu = osmData.address.borough || osmData.address.city || '';
-            const dong = osmData.address.suburb || osmData.address.quarter || '';
-            regionStr = `${gu} ${dong}`.trim();
+            gu = osmData.address.borough || osmData.address.city || '';
+            dong = osmData.address.suburb || osmData.address.quarter || '';
+            full = `${gu} ${dong}`.trim();
           }
         }
-      } catch (e) {
-        console.warn('[검색] OSM 폴백 실패:', e.message);
-      }
+      } catch (e) {}
     }
 
-    return regionStr || '';
+    return { gu, dong, full };
   }
 
   function getDistance(lat1, lng1, lat2, lng2) {

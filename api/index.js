@@ -190,7 +190,7 @@ function getLatLngFromPixel(centerLat, centerLng, zoom, px, py, size = 1024) {
  */
 app.post('/api/ai-scan', async (req, res) => {
   try {
-    const { lat, lng, businessType, keyword, zoom = 17 } = req.body;
+    const { lat, lng, businessType, keyword, zoom = 17, regionName = '' } = req.body;
     if (!lat || !lng || !keyword) {
       return res.status(400).json({ error: '파라미터 누락 (lat, lng, keyword)' });
     }
@@ -279,7 +279,8 @@ app.post('/api/ai-scan', async (req, res) => {
 
     // Step 2: Gemini Vision API로 점포명 추출
     const brands = BRAND_CONTEXT[keyword] || '';
-    const prompt = `지도에서 "${keyword}"(브랜드: ${brands}) 매장을 모두 찾아 JSON으로만 출력하세요. 
+    const regionHint = regionName ? `(현재 스캔 지역: ${regionName} 주변)` : '';
+    const prompt = `지도에서 "${keyword}"(브랜드: ${brands}) 매장을 모두 찾아 JSON으로만 출력하세요. ${regionHint}
 프랜차이즈가 아닌 일반 식당/가게의 경우 지도상의 아이콘(숟가락, 커피잔 등)을 보고 판단하세요.
 형식: [{"name":"이름","x":숫자,"y":숫자},...]
 중요: 공백 없이 촘촘하게(Minified) 출력하고, 인삿말 없이 결과만 뱉으세요.`;

@@ -97,6 +97,7 @@ const SearchManager = (() => {
     const scanZoom = 17; // 고정된 줌 레벨 (반경 500m 수색 최적화)
 
     let storeNames = [];
+    let aiStores = [];
     try {
       if (onProgress) onProgress(`🔍 AI 지도 정밀 스캔 중... (${bt.keyword})`);
       
@@ -118,7 +119,7 @@ const SearchManager = (() => {
       }
 
       const data = await response.json();
-      const aiStores = data.stores || [];
+      aiStores = data.stores || [];
       if (onProgress) onProgress(`✅ AI 스캔 완료 (${aiStores.length}개 위치 특정)`);
     } catch (e) {
       console.warn('[AI스캔] 실패:', e.message);
